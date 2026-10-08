@@ -142,7 +142,8 @@ PurchaseRecord& AcquisitionManager::record(
     Money tax,
     Money postTaxCost,
     bool approved,
-    std::string reason) {
+    std::string reason,
+    bool cancelled) {
 
     history_.push_back(
         PurchaseRecord{
@@ -165,7 +166,8 @@ PurchaseRecord& AcquisitionManager::record(
             postTaxCost,
 
             approved,
-            std::move(reason)
+            std::move(reason),
+            cancelled
         }
     );
 
@@ -242,7 +244,143 @@ const PurchaseRecord& AcquisitionManager::purchase(
         tax,
         postTaxCost,
         true,
-        {}
+        {},
+        false
+    );
+}
+
+// ------------------------------------------------------
+// Q8: Cancel an approved order.
+// ------------------------------------------------------
+
+const PurchaseRecord& AcquisitionManager::cancel(
+    int orderNo) {
+
+    // ----------------------------------------------
+    // Find the original order.
+    // ----------------------------------------------
+
+    PurchaseRecord* original = nullptr;
+
+    for (auto& rec : history_) {
+
+        if (rec.orderNo == orderNo) {
+            original = &rec;
+            break;
+        }
+    }
+
+    if (!original) {
+
+        throw std::invalid_argument(
+            "order not found: "
+            + std::to_string(orderNo)
+        );
+    }
+
+    // ----------------------------------------------
+    // Only approved purchases can be cancelled.
+    // ----------------------------------------------
+
+    if (!original->approved) {
+
+        throw std::invalid_argument(
+            "order is not an approved purchase"
+        );
+    }
+
+    // ----------------------------------------------
+    // Prevent duplicate cancellation.
+    //
+    // The cancellation record stores the original
+    // order number in its reason.
+    // ----------------------------------------------
+
+    const std::string cancellationMarker =
+        "Cancellation of order #"
+        + std::to_string(orderNo);
+
+    for (const auto& rec : history_) {
+
+        if (rec.cancelled &&
+            rec.reason == cancellationMarker) {
+
+            throw std::invalid_argument(
+                "order already cancelled: "
+                + std::to_string(orderNo)
+            );
+        }
+    }
+
+    // ----------------------------------------------
+    // Save the original order information before
+    // adding the cancellation record.
+    //
+    // push_back() may reallocate history_, so we
+    // must not keep using the original pointer after
+    // adding a new record.
+    // ----------------------------------------------
+
+    const std::string id =
+        original->resourceId;
+
+    const std::string title =
+        original->title;
+
+    const ResourceCategory category =
+        original->category;
+
+    const int quantity =
+        original->quantity;
+
+    const Money preTaxCost =
+        original->preTaxCost;
+
+    const Money tax =
+        original->tax;
+
+    const Money postTaxCost =
+        original->postTaxCost;
+
+    // ----------------------------------------------
+    // Refund budget and quota usage.
+    // ----------------------------------------------
+
+    budget_.refund(
+        category,
+        quantity,
+        postTaxCost,
+        title
+    );
+
+    // ----------------------------------------------
+    // Reduce catalogue holdings.
+    // ----------------------------------------------
+
+    catalog_.addHoldings(
+        id,
+        -quantity
+    );
+
+    // ----------------------------------------------
+    // Keep the original purchase record unchanged.
+    //
+    // Add a separate cancellation record.
+    // ----------------------------------------------
+
+    Resource* resource =
+        catalog_.find(id);
+
+    return record(
+        resource,
+        id,
+        quantity,
+        preTaxCost,
+        tax,
+        postTaxCost,
+        false,
+        cancellationMarker,
+        true
     );
 }
 
@@ -327,7 +465,8 @@ AcquisitionManager::processBatch(
                     tax,
                     postTaxCost,
                     false,
-                    why
+                    why,
+                    false
                 )
             );
         }
@@ -336,15 +475,45 @@ AcquisitionManager::processBatch(
     return results;
 }
 
+// ------------------------------------------------------
+// Calculate total active spending.
+//
+// The original purchase record remains in history after
+// cancellation. Therefore, we check whether a separate
+// cancellation record refers to that purchase before
+// adding its cost.
+// ------------------------------------------------------
+
 Money AcquisitionManager::totalSpent() const {
 
     Money sum;
 
     for (const auto& rec : history_) {
 
-        if (rec.approved) {
+        // Rejected purchases and cancellation records
+        // are not active spending.
+        if (!rec.approved || rec.cancelled) {
+            continue;
+        }
 
-            // Actual spending includes tax.
+        const std::string cancellationMarker =
+            "Cancellation of order #"
+            + std::to_string(rec.orderNo);
+
+        bool wasCancelled = false;
+
+        for (const auto& cancellation : history_) {
+
+            if (cancellation.cancelled &&
+                cancellation.reason ==
+                    cancellationMarker) {
+
+                wasCancelled = true;
+                break;
+            }
+        }
+
+        if (!wasCancelled) {
             sum += rec.postTaxCost;
         }
     }
@@ -365,11 +534,22 @@ void AcquisitionManager::printReport(
            << std::setw(3)
            << std::left
            << rec.orderNo
-           << " "
-           << (rec.approved
-                   ? "APPROVED"
-                   : "REJECTED")
-           << "  "
+           << " ";
+
+        if (rec.cancelled) {
+
+            os << "CANCELLED";
+
+        } else if (rec.approved) {
+
+            os << "APPROVED";
+
+        } else {
+
+            os << "REJECTED";
+        }
+
+        os << "  "
            << std::setw(6)
            << rec.resourceId
            << " x"
@@ -384,7 +564,7 @@ void AcquisitionManager::printReport(
            << "  "
            << rec.title;
 
-        if (!rec.approved) {
+        if (!rec.approved || rec.cancelled) {
 
             os << "\n        reason: "
                << rec.reason;

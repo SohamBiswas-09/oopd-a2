@@ -1,5 +1,7 @@
 // Demo: builds a small catalog, sets a budget with per-category quotas,
-// and runs a batch of purchase requests through the acquisition manager.
+// and runs purchase requests through the acquisition manager.
+//
+// Q8 additionally demonstrates cancellation of an approved order.
 
 #include <iostream>
 
@@ -164,9 +166,9 @@ int main() {
         {"B002", 5},   // 7200  ok
         {"B001", 1},   // 450   ok
         {"R001", 20},  // 5000  ok
-        {"R002", 25},  // 10000 ok
-        {"R002", 15},  // 6000  rejected if electronic spend quota is exceeded
-        {"R002", 5},   // 2000
+        {"R002", 25},  // rejected: electronic spend quota exceeded
+        {"R002", 15},  // rejected: overall budget exceeded
+        {"R002", 5},   // 2000  ok
         {"E001", 5},   // EBook purchase
         {"X999", 1},   // rejected: unknown id
     });
@@ -192,12 +194,91 @@ int main() {
     std::cout << "\n=== Direct purchase that breaks a quota ===\n";
 
     try {
-        acq.purchase("B002", 1);
-    } catch (const QuotaExceededError& e) {
-        std::cout << "QuotaExceededError: "
+        const PurchaseRecord& rejectedOrder =
+            acq.purchase("B002", 1);
+
+        if (!rejectedOrder.approved) {
+            std::cout << "Purchase rejected: "
+                      << rejectedOrder.reason
+                      << "\n";
+        }
+    } catch (const std::exception& e) {
+        std::cout << "Purchase error: "
                   << e.what()
                   << "\n";
     }
+
+    // --------------------------------------------------
+    // Q8: Cancellation
+    // --------------------------------------------------
+    //
+    // An approved order is cancelled.
+    //
+    // The cancellation:
+    //   1. refunds the budget,
+    //   2. refunds quota usage,
+    //   3. reduces catalogue holdings,
+    //   4. keeps the original order in history,
+    //   5. adds a separate cancellation record.
+    // --------------------------------------------------
+
+    std::cout << "\n=== Q8 Cancellation ===\n";
+
+    // One copy costs 450.00.
+    //
+    // Current Book spending is 9450.00, so:
+    //
+    //     9450 + 450 = 9900
+    //
+    // This is within the 10000.00 Book quota.
+    const PurchaseRecord& cancellationTestOrder =
+        acq.purchase("B001", 1);
+
+    std::cout << "Created order #"
+              << cancellationTestOrder.orderNo
+              << " for "
+              << cancellationTestOrder.quantity
+              << " copy of "
+              << cancellationTestOrder.title
+              << "\n";
+
+    std::cout << "Order approved: "
+              << (cancellationTestOrder.approved
+                      ? "yes"
+                      : "no")
+              << "\n";
+
+    std::cout << "Holdings before cancellation: "
+              << catalog.holdings("B001")
+              << "\n";
+
+    std::cout << "Total spent before cancellation: "
+              << acq.totalSpent()
+              << "\n";
+
+    if (cancellationTestOrder.approved) {
+
+        const int cancelledOrderNo =
+            cancellationTestOrder.orderNo;
+
+        const PurchaseRecord& cancellation =
+            acq.cancel(cancelledOrderNo);
+
+        std::cout << "Cancellation record: "
+                  << cancellation.reason
+                  << "\n";
+
+        std::cout << "Holdings after cancellation: "
+                  << catalog.holdings("B001")
+                  << "\n";
+
+        std::cout << "Total spent after cancellation: "
+                  << acq.totalSpent()
+                  << "\n";
+    }
+
+    std::cout << "\n=== Final Acquisition Report ===\n";
+    acq.printReport(std::cout);
 
     return 0;
 }

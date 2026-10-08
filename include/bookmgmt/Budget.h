@@ -106,6 +106,21 @@ public:
         const std::string& title
     );
 
+    // Q8:
+    // Reverses a previously committed purchase.
+    //
+    // This refunds:
+    //   - category units,
+    //   - category spending,
+    //   - overall spending,
+    //   - Q7 title usage.
+    void refund(
+        ResourceCategory c,
+        int units,
+        Money cost,
+        const std::string& title
+    );
+
     void print(std::ostream& os) const;
 
 private:

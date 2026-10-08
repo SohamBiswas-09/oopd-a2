@@ -34,6 +34,10 @@ struct PurchaseRecord {
 
     bool approved;
     std::string reason;
+
+    // Q8:
+    // True when this history entry represents a cancellation.
+    bool cancelled = false;
 };
 
 class AcquisitionManager {
@@ -87,6 +91,16 @@ public:
         int quantity
     );
 
+    // Q8:
+    // Cancels an approved purchase order.
+    //
+    // The original order remains in history and a separate
+    // cancellation record is added.
+    //
+    // Throws std::invalid_argument if the order does not exist,
+    // was not approved, or was already cancelled.
+    const PurchaseRecord& cancel(int orderNo);
+
     // Processes requests in order.
     // Each request is approved or rejected independently.
     std::vector<PurchaseRecord> processBatch(
@@ -117,7 +131,8 @@ private:
         Money tax,
         Money postTaxCost,
         bool approved,
-        std::string reason
+        std::string reason,
+        bool cancelled = false
     );
 
     Catalog& catalog_;

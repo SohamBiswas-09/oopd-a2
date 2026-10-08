@@ -28,7 +28,9 @@ Budget::Budget(Money total)
     }
 }
 
-void Budget::setQuota(ResourceCategory c, Quota q) {
+void Budget::setQuota(
+    ResourceCategory c,
+    Quota q) {
 
     if (q.maxUnits < 0 ||
         q.maxSpend.isNegative() ||
@@ -42,7 +44,9 @@ void Budget::setQuota(ResourceCategory c, Quota q) {
     quotas_[c] = q;
 }
 
-void Budget::removeQuota(ResourceCategory c) {
+void Budget::removeQuota(
+    ResourceCategory c) {
+
     quotas_.erase(c);
 }
 
@@ -76,7 +80,9 @@ Usage Budget::usageFor(
 
     if (titleIt != titleUsage_.end()) {
         result.differentTitles =
-            static_cast<int>(titleIt->second.size());
+            static_cast<int>(
+                titleIt->second.size()
+            );
     }
 
     return result;
@@ -309,13 +315,10 @@ void Budget::commit(
     // --------------------------------------------------
     // Q7:
     // Record the title.
-    //
-    // If the title already exists, its unit count is
-    // increased but the number of different titles
-    // remains unchanged.
     // --------------------------------------------------
 
     if (!title.empty()) {
+
         titleUsage_[c][title] += units;
 
         u.differentTitles =
@@ -331,7 +334,122 @@ void Budget::commit(
     spent_ += cost;
 }
 
-void Budget::print(std::ostream& os) const {
+// ------------------------------------------------------
+// Q8: Refund a previously committed purchase.
+// ------------------------------------------------------
+
+void Budget::refund(
+    ResourceCategory c,
+    int units,
+    Money cost,
+    const std::string& title) {
+
+    // --------------------------------------------------
+    // Validate refund arguments.
+    // --------------------------------------------------
+
+    if (units <= 0) {
+        throw std::invalid_argument(
+            "refund quantity must be positive"
+        );
+    }
+
+    if (cost.isNegative()) {
+        throw std::invalid_argument(
+            "refund cost must not be negative"
+        );
+    }
+
+    // --------------------------------------------------
+    // Find the existing category usage.
+    // --------------------------------------------------
+
+    auto usageIt = usage_.find(c);
+
+    if (usageIt == usage_.end() ||
+        usageIt->second.units < units ||
+        usageIt->second.spent < cost ||
+        spent_ < cost) {
+
+        throw std::invalid_argument(
+            "refund exceeds current budget usage"
+        );
+    }
+
+    // --------------------------------------------------
+    // Reverse category units and spending.
+    // --------------------------------------------------
+
+    Usage& u = usageIt->second;
+
+    u.units -= units;
+    u.spent -= cost;
+
+    // --------------------------------------------------
+    // Q7:
+    // Reverse title usage.
+    // --------------------------------------------------
+
+    if (!title.empty()) {
+
+        auto categoryTitles =
+            titleUsage_.find(c);
+
+        if (categoryTitles == titleUsage_.end()) {
+            throw std::invalid_argument(
+                "title was not previously purchased"
+            );
+        }
+
+        auto titleIt =
+            categoryTitles->second.find(title);
+
+        if (titleIt == categoryTitles->second.end() ||
+            titleIt->second < units) {
+
+            throw std::invalid_argument(
+                "refund exceeds title usage"
+            );
+        }
+
+        titleIt->second -= units;
+
+        // If no units of this title remain,
+        // remove the title completely.
+        if (titleIt->second == 0) {
+            categoryTitles->second.erase(titleIt);
+        }
+
+        // Remove an empty category title map.
+        if (categoryTitles->second.empty()) {
+            titleUsage_.erase(categoryTitles);
+        }
+
+        u.differentTitles =
+            static_cast<int>(
+                titleUsage_[c].size()
+            );
+    }
+
+    // --------------------------------------------------
+    // Reverse overall spending.
+    // --------------------------------------------------
+
+    spent_ -= cost;
+
+    // --------------------------------------------------
+    // Remove empty usage entry.
+    // --------------------------------------------------
+
+    if (u.units == 0 &&
+        u.spent.isZero()) {
+
+        usage_.erase(usageIt);
+    }
+}
+
+void Budget::print(
+    std::ostream& os) const {
 
     os << "Budget: total "
        << total_
@@ -352,8 +470,11 @@ void Budget::print(std::ostream& os) const {
 
     for (ResourceCategory c : kAllCategories) {
 
-        const Usage u = usageFor(c);
-        const auto q = quotaFor(c);
+        const Usage u =
+            usageFor(c);
+
+        const auto q =
+            quotaFor(c);
 
         // ----------------------------------------------
         // Units
@@ -375,13 +496,21 @@ void Budget::print(std::ostream& os) const {
             "/";
 
         if (q) {
+
             if (q->maxTitles < 0) {
+
                 titles += "-";
+
             } else {
+
                 titles +=
-                    std::to_string(q->maxTitles);
+                    std::to_string(
+                        q->maxTitles
+                    );
             }
+
         } else {
+
             titles += "-";
         }
 
