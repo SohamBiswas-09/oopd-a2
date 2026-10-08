@@ -621,12 +621,32 @@ const PurchaseRecord& AcquisitionManager::cancel(
 
 
 // ======================================================
-// Q8 + Q9: Batch processing
+// Q8 + Q9 + Q11: Batch processing
+// ======================================================
+//
+// allOrNothing = false:
+//     Existing behavior. Requests are processed
+//     independently.
+//
+// allOrNothing = true:
+//     First simulate the entire batch using copies of
+//     the budgets. No real purchase is performed during
+//     validation.
+//
+//     If any request fails:
+//         - no real budget is changed
+//         - no catalogue holdings are changed
+//         - no request is purchased
+//
+//     If every request succeeds:
+//         - the real purchase() function is called for
+//           every request.
 // ======================================================
 
 std::vector<PurchaseRecord>
 AcquisitionManager::processBatch(
-    const std::vector<PurchaseRequest>& reqs) {
+    const std::vector<PurchaseRequest>& reqs,
+    bool allOrNothing) {
 
     std::vector<PurchaseRecord> results;
 
@@ -634,10 +654,289 @@ AcquisitionManager::processBatch(
         reqs.size()
     );
 
+    // ==================================================
+    // Q11: All-or-nothing mode
+    // ==================================================
+
+    if (allOrNothing) {
+
+        // ------------------------------------------------
+        // Create temporary copies of all budgets.
+        //
+        // These copies are used only for simulation.
+        // The real budgets are not modified until the
+        // complete batch has passed validation.
+        // ------------------------------------------------
+
+        Budget temporaryDefaultBudget =
+            budget_;
+
+        std::map<std::string, Budget>
+            temporaryDepartmentBudgets =
+                departmentBudgets_;
+
+        // ------------------------------------------------
+        // Store the calculated information for each
+        // request so we do not need to calculate it
+        // again after validation.
+        // ------------------------------------------------
+
+        struct BatchItem {
+            const Resource* resource = nullptr;
+            Money preTaxCost;
+            Money tax;
+            Money postTaxCost;
+            std::string reason;
+        };
+
+        std::vector<BatchItem> items;
+
+        items.reserve(
+            reqs.size()
+        );
+
+        bool batchValid = true;
+
+        // ------------------------------------------------
+        // Preflight every request.
+        // ------------------------------------------------
+
+        for (const auto& req : reqs) {
+
+            BatchItem item;
+
+            // --------------------------------------------
+            // Find resource.
+            // --------------------------------------------
+
+            item.resource =
+                catalog_.find(
+                    req.resourceId
+                );
+
+            if (!item.resource) {
+
+                item.reason =
+                    "resource not found: "
+                    + req.resourceId;
+
+                batchValid = false;
+
+                items.push_back(
+                    std::move(item)
+                );
+
+                continue;
+            }
+
+            // --------------------------------------------
+            // Check quantity.
+            // --------------------------------------------
+
+            if (req.quantity <= 0) {
+
+                item.reason =
+                    "quantity must be positive";
+
+                batchValid = false;
+
+                items.push_back(
+                    std::move(item)
+                );
+
+                continue;
+            }
+
+            // --------------------------------------------
+            // Calculate pre-tax cost.
+            // --------------------------------------------
+
+            item.preTaxCost =
+                item.resource->costFor(
+                    req.quantity
+                );
+
+            // --------------------------------------------
+            // Calculate tax.
+            // --------------------------------------------
+
+            item.tax =
+                taxFor(
+                    *item.resource,
+                    item.preTaxCost
+                );
+
+            // --------------------------------------------
+            // Calculate final post-tax cost.
+            // --------------------------------------------
+
+            item.postTaxCost =
+                item.preTaxCost + item.tax;
+
+            // --------------------------------------------
+            // Select the temporary budget.
+            // --------------------------------------------
+
+            try {
+
+                Budget* selectedBudget = nullptr;
+
+                if (req.department.empty()) {
+
+                    selectedBudget =
+                        &temporaryDefaultBudget;
+
+                } else {
+
+                    auto it =
+                        temporaryDepartmentBudgets.find(
+                            req.department
+                        );
+
+                    if (it ==
+                        temporaryDepartmentBudgets.end()) {
+
+                        throw std::invalid_argument(
+                            "department not found: "
+                            + req.department
+                        );
+                    }
+
+                    selectedBudget =
+                        &it->second;
+                }
+
+                // ----------------------------------------
+                // Check the request against the temporary
+                // budget.
+                //
+                // This is important because earlier
+                // requests in the same batch have already
+                // been committed to the temporary budget.
+                // ----------------------------------------
+
+                item.reason =
+                    selectedBudget->check(
+                        item.resource->category(),
+                        req.quantity,
+                        item.postTaxCost,
+                        item.resource->title()
+                    );
+
+                // ----------------------------------------
+                // If the request passes, commit it to the
+                // temporary budget.
+                //
+                // This does NOT change the real budget.
+                // ----------------------------------------
+
+                if (item.reason.empty()) {
+
+                    selectedBudget->commit(
+                        item.resource->category(),
+                        req.quantity,
+                        item.postTaxCost,
+                        item.resource->title()
+                    );
+                }
+
+            } catch (const std::invalid_argument& e) {
+
+                item.reason = e.what();
+            }
+
+            if (!item.reason.empty()) {
+                batchValid = false;
+            }
+
+            items.push_back(
+                std::move(item)
+            );
+        }
+
+        // =================================================
+        // The complete batch failed.
+        // =================================================
+
+        if (!batchValid) {
+
+            for (std::size_t i = 0;
+                 i < reqs.size();
+                 ++i) {
+
+                const auto& req =
+                    reqs[i];
+
+                const auto& item =
+                    items[i];
+
+                std::string reason;
+
+                if (!item.reason.empty()) {
+
+                    reason =
+                        item.reason;
+
+                } else {
+
+                    reason =
+                        "batch rejected: "
+                        "all-or-nothing validation failed";
+                }
+
+                results.push_back(
+                    record(
+                        item.resource,
+                        req.resourceId,
+                        req.quantity,
+                        item.preTaxCost,
+                        item.tax,
+                        item.postTaxCost,
+                        false,
+                        reason,
+                        false,
+                        req.department
+                    )
+                );
+            }
+
+            return results;
+        }
+
+        // =================================================
+        // The complete batch passed validation.
+        //
+        // Now perform the real purchases.
+        // =================================================
+
+        for (const auto& req : reqs) {
+
+            results.push_back(
+                purchase(
+                    req.department,
+                    req.resourceId,
+                    req.quantity
+                )
+            );
+        }
+
+        return results;
+    }
+
+    // ==================================================
+    // Original behavior
+    //
+    // allOrNothing == false
+    //
+    // Each request is processed independently.
+    // ==================================================
+
     for (const auto& req : reqs) {
 
         const Resource* r =
-            catalog_.find(req.resourceId);
+            catalog_.find(
+                req.resourceId
+            );
 
         Money preTaxCost;
         Money tax;

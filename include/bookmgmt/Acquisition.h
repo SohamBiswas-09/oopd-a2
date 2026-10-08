@@ -1,10 +1,16 @@
 #pragma once
+
 // AcquisitionManager: turns purchase requests into orders, enforcing the
 // Budget's quotas, updating Catalog holdings and keeping an order history.
 //
 // Q9:
 // Each department can have its own Budget object.
 // A purchase request can specify the department that pays for it.
+//
+// Q11:
+// processBatch() can optionally operate in all-or-nothing mode.
+// If allOrNothing is true, the complete batch is committed only when
+// every request can be approved.
 
 #include <iosfwd>
 #include <map>
@@ -56,31 +62,20 @@ struct PurchaseRecord {
 
 class AcquisitionManager {
 public:
-    AcquisitionManager(
-        Catalog& catalog,
-        Budget& budget
-    );
+    AcquisitionManager(Catalog& catalog, Budget& budget);
 
-    // --------------------------------------------------
-    // Basic purchase quoting
-    // --------------------------------------------------
-
-    // Price of a request before tax.
-    // Throws NotFoundError.
     Money quote(
         const std::string& id,
         int quantity
     ) const;
 
-    // --------------------------------------------------
-    // Q6: Tax configuration
-    // --------------------------------------------------
+    void setPrintTaxRate(
+        double percent
+    );
 
-    // Rates are percentages.
-    // Example: 5.0 means 5%.
-    void setPrintTaxRate(double percent);
-
-    void setElectronicTaxRate(double percent);
+    void setElectronicTaxRate(
+        double percent
+    );
 
     double printTaxRate() const {
         return printTaxRate_;
@@ -90,23 +85,15 @@ public:
         return electronicTaxRate_;
     }
 
-    // --------------------------------------------------
+    // ========================================================
     // Q9: Department budgets
-    // --------------------------------------------------
+    // ========================================================
 
-    // Creates a department with its own budget.
-    //
-    // Throws std::invalid_argument if the department name
-    // is empty or already exists.
     void addDepartment(
         const std::string& department,
         Money budget
     );
 
-    // Returns the budget belonging to a department.
-    //
-    // Throws std::invalid_argument if the department does
-    // not exist.
     Budget& departmentBudget(
         const std::string& department
     );
@@ -115,28 +102,20 @@ public:
         const std::string& department
     ) const;
 
-    // Returns true if a department has been registered.
     bool hasDepartment(
         const std::string& department
     ) const;
 
-    // --------------------------------------------------
-    // Purchase validation
-    // --------------------------------------------------
+    // ========================================================
+    // Purchase checking
+    // ========================================================
 
-    // Original Q1-Q8 API.
-    //
-    // Uses the original/default Budget supplied to the
-    // AcquisitionManager constructor.
     bool canPurchase(
         const std::string& id,
         int quantity,
         std::string* reason = nullptr
     ) const;
 
-    // Q9:
-    // Checks whether a department can afford the purchase
-    // and satisfy its own quotas.
     bool canPurchase(
         const std::string& department,
         const std::string& id,
@@ -144,48 +123,44 @@ public:
         std::string* reason = nullptr
     ) const;
 
-    // --------------------------------------------------
-    // Purchase
-    // --------------------------------------------------
+    // ========================================================
+    // Purchasing
+    // ========================================================
 
-    // Original Q1-Q8 API.
-    //
-    // Uses the original/default Budget.
     const PurchaseRecord& purchase(
         const std::string& id,
         int quantity
     );
 
-    // Q9:
-    // Charges the purchase to the specified department.
     const PurchaseRecord& purchase(
         const std::string& department,
         const std::string& id,
         int quantity
     );
 
-    // --------------------------------------------------
+    // ========================================================
     // Q8: Cancellation
-    // --------------------------------------------------
+    // ========================================================
 
-    // Cancels an approved purchase order.
-    //
-    // The original order remains in history and a separate
-    // cancellation record is added.
-    //
-    // Throws std::invalid_argument if the order does not exist,
-    // was not approved, or was already cancelled.
-    const PurchaseRecord& cancel(int orderNo);
+    const PurchaseRecord& cancel(
+        int orderNo
+    );
 
-    // --------------------------------------------------
-    // Q8/Q9: Batch processing
-    // --------------------------------------------------
-
-    // Original batch API.
+    // ========================================================
+    // Q11: Batch processing
     //
-    // Each request is approved or rejected independently.
+    // allOrNothing = false:
+    //     Existing behavior. Each request is processed independently.
+    //
+    // allOrNothing = true:
+    //     The complete batch is committed only if every request
+    //     can be approved. If any request would fail, nothing
+    //     is purchased.
+    // ========================================================
+
     std::vector<PurchaseRecord> processBatch(
-        const std::vector<PurchaseRequest>& reqs
+        const std::vector<PurchaseRequest>& reqs,
+        bool allOrNothing = false
     );
 
     const std::vector<PurchaseRecord>& history() const {
@@ -194,24 +169,16 @@ public:
 
     Money totalSpent() const;
 
-    void printReport(std::ostream& os) const;
+    void printReport(
+        std::ostream& os
+    ) const;
 
 private:
-    // --------------------------------------------------
-    // Tax calculation
-    // --------------------------------------------------
-
     Money taxFor(
         const Resource& r,
         Money preTaxCost
     ) const;
 
-    // --------------------------------------------------
-    // Budget selection
-    // --------------------------------------------------
-
-    // Returns the default/original budget when department
-    // is empty, otherwise returns the requested department.
     Budget& budgetFor(
         const std::string& department
     );
@@ -219,10 +186,6 @@ private:
     const Budget& budgetFor(
         const std::string& department
     ) const;
-
-    // --------------------------------------------------
-    // History creation
-    // --------------------------------------------------
 
     PurchaseRecord& record(
         const Resource* r,
@@ -237,29 +200,21 @@ private:
         const std::string& department = {}
     );
 
-    // --------------------------------------------------
-    // Data members
-    // --------------------------------------------------
-
     Catalog& catalog_;
 
     // Original/default budget.
-    //
-    // Kept so that all Q1-Q8 code continues to work.
     Budget& budget_;
 
-    // Q9:
-    // Each department has an independent Budget object.
+    // Q9: budgets for named departments.
     std::map<std::string, Budget> departmentBudgets_;
 
     std::vector<PurchaseRecord> history_;
 
     int nextOrderNo_ = 1;
 
-    // Q6:
-    // Configurable tax rates, expressed as percentages.
     double printTaxRate_ = 0.0;
+
     double electronicTaxRate_ = 0.0;
 };
 
-}  // namespace bookmgmt
+}

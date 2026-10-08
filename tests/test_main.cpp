@@ -2351,6 +2351,308 @@ static void testBudgetRollover() {
 }
 
 
+
+// ============================================================
+// Q11 - All-or-nothing batch processing
+// ============================================================
+
+static void testBatchAllOrNothing() {
+
+    // --------------------------------------------------------
+    // Create resources.
+    // --------------------------------------------------------
+
+    Catalog c;
+
+    c.emplace<Book>(
+        "B1",
+        "Clean Code",
+        std::vector<std::string>{
+            "Robert C. Martin"
+        },
+        "ISBN1",
+        "Publisher",
+        2008,
+        Money::of(100)
+    );
+
+    c.emplace<Book>(
+        "B2",
+        "Design Patterns",
+        std::vector<std::string>{
+            "Erich Gamma"
+        },
+        "ISBN2",
+        "Publisher",
+        1994,
+        Money::of(200)
+    );
+
+    // --------------------------------------------------------
+    // Create a budget with a book unit quota.
+    //
+    // The budget can buy at most 10 Book units and spend
+    // at most ₹1000.
+    // --------------------------------------------------------
+
+    Budget b(
+        Money::of(1000)
+    );
+
+    b.setQuota(
+        ResourceCategory::Book,
+        {
+            10,
+            Money::of(1000),
+            5
+        }
+    );
+
+    AcquisitionManager acq(
+        c,
+        b
+    );
+
+    // --------------------------------------------------------
+    // Q11: A valid batch should commit completely.
+    //
+    // 2 copies of B1 = ₹200
+    // 3 copies of B2 = ₹600
+    //
+    // Total = ₹800
+    // --------------------------------------------------------
+
+    const auto successful =
+        acq.processBatch(
+            {
+                {"B1", 2},
+                {"B2", 3}
+            },
+            true
+        );
+
+    CHECK(
+        successful.size() == 2
+    );
+
+    CHECK(
+        successful[0].approved
+    );
+
+    CHECK(
+        successful[1].approved
+    );
+
+    CHECK(
+        c.holdings("B1") == 2
+    );
+
+    CHECK(
+        c.holdings("B2") == 3
+    );
+
+    CHECK(
+        b.spent() ==
+        Money::of(800)
+    );
+
+    CHECK(
+        b.remaining() ==
+        Money::of(200)
+    );
+
+    // --------------------------------------------------------
+    // Q11: A failed all-or-nothing batch must not purchase
+    // any request.
+    //
+    // Current usage:
+    //   5 Book units
+    //   ₹800 spent
+    //
+    // Batch:
+    //   B1 x 1 -> would be valid
+    //   B2 x 5 -> would make total units 11
+    //
+    // Therefore the complete batch must be rejected.
+    // --------------------------------------------------------
+
+    const int b1HoldingsBefore =
+        c.holdings("B1");
+
+    const int b2HoldingsBefore =
+        c.holdings("B2");
+
+    const Money spentBefore =
+        b.spent();
+
+    const Money remainingBefore =
+        b.remaining();
+
+    const auto failed =
+        acq.processBatch(
+            {
+                {"B1", 1},
+                {"unknown", 1}
+            },
+            true
+        );
+
+    CHECK(
+        failed.size() == 2
+    );
+
+    // Both requests are rejected because the complete
+    // all-or-nothing batch must fail.
+    CHECK(
+        !failed[0].approved
+    );
+
+    CHECK(
+        !failed[1].approved
+    );
+
+    // The second request is rejected because the resource
+    // does not exist.
+    CHECK(
+        failed[1].reason.find("not found")
+        != std::string::npos
+    );
+
+    // --------------------------------------------------------
+    // Most important Q11 checks:
+    //
+    // Nothing from the failed batch was purchased.
+    // --------------------------------------------------------
+
+    CHECK(
+        c.holdings("B1") ==
+        b1HoldingsBefore
+    );
+
+    CHECK(
+        c.holdings("B2") ==
+        b2HoldingsBefore
+    );
+
+    CHECK(
+        b.spent() ==
+        spentBefore
+    );
+
+    CHECK(
+        b.remaining() ==
+        remainingBefore
+    );
+
+    // --------------------------------------------------------
+    // The rejected batch must not contribute to total spent.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.totalSpent() ==
+        Money::of(800)
+    );
+
+    // --------------------------------------------------------
+    // Q11: allOrNothing = false must preserve the old
+    // independent-processing behavior.
+    //
+    // At this point the budget has ₹200 remaining.
+    //
+    // B1 x 1 -> ₹100 -> approved
+    // B2 x 1 -> ₹200 -> rejected
+    //
+    // The first request is still purchased even though the
+    // second request fails.
+    // --------------------------------------------------------
+
+    const auto independent =
+        acq.processBatch(
+            {
+                {"B1", 1},
+                {"B2", 1}
+            },
+            false
+        );
+
+    CHECK(
+        independent.size() == 2
+    );
+
+    CHECK(
+        independent[0].approved
+    );
+
+    CHECK(
+        !independent[1].approved
+    );
+
+    CHECK(
+        c.holdings("B1") == 3
+    );
+
+    CHECK(
+        c.holdings("B2") == 3
+    );
+
+    CHECK(
+        b.spent() ==
+        Money::of(900)
+    );
+
+    CHECK(
+        b.remaining() ==
+        Money::of(100)
+    );
+
+    // --------------------------------------------------------
+    // The default argument must also preserve the old
+    // behavior.
+    //
+    // Calling processBatch(requests) is equivalent to
+    // processBatch(requests, false).
+    // --------------------------------------------------------
+
+    const auto defaultMode =
+        acq.processBatch(
+            {
+                {"B1", 1},
+                {"B2", 1}
+            }
+        );
+
+    CHECK(
+        defaultMode.size() == 2
+    );
+
+    CHECK(
+        defaultMode[0].approved
+    );
+
+    CHECK(
+        !defaultMode[1].approved
+    );
+
+    CHECK(
+        c.holdings("B1") == 4
+    );
+
+    CHECK(
+        c.holdings("B2") == 3
+    );
+
+    CHECK(
+        b.spent() ==
+        Money::of(1000)
+    );
+
+    CHECK(
+        b.remaining() ==
+        Money::of(0)
+    );
+}
+
+
 // ============================================================
 // Main
 // ============================================================
@@ -2384,6 +2686,8 @@ int main() {
     testDepartments();
 
     testBudgetRollover();
+
+    testBatchAllOrNothing();
 
     std::cout
         << "\n"

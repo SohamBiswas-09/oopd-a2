@@ -445,5 +445,250 @@ int main() {
     std::cout << "\n=== Final Acquisition Report ===\n";
     acq.printReport(std::cout);
 
+        // ========================================================
+    // Q10: Year-end budget rollover
+    // ========================================================
+
+    std::cout
+        << "\n=== Q10 Year-End Budget Rollover ===\n";
+
+    // This year's budget is ₹1000.
+    Budget currentYear(
+        Money::of(1000)
+    );
+
+    // Spend ₹400 during the current year.
+    currentYear.commit(
+        ResourceCategory::Book,
+        2,
+        Money::of(400),
+        "Clean Code"
+    );
+
+    std::cout
+        << "Current year total budget: "
+        << currentYear.total()
+        << "\n";
+
+    std::cout
+        << "Current year spent: "
+        << currentYear.spent()
+        << "\n";
+
+    std::cout
+        << "Current year unspent: "
+        << currentYear.remaining()
+        << "\n";
+
+    // Carry forward 50% of the unspent amount.
+    Budget nextYear =
+        currentYear.rollover(50.0);
+
+    std::cout
+        << "Rollover percentage: 50%\n";
+
+    std::cout
+        << "Next year's budget: "
+        << nextYear.total()
+        << "\n";
+
+    std::cout
+        << "Next year's spent: "
+        << nextYear.spent()
+        << "\n";
+
+    std::cout
+        << "Next year's remaining: "
+        << nextYear.remaining()
+        << "\n";
+
+
+    // ========================================================
+    // Q11: All-or-Nothing Batch Processing
+    // ========================================================
+
+    std::cout
+        << "\n=== Q11 All-or-Nothing Batch Processing ===\n";
+
+    // Use a separate catalog and budget so this demonstration
+    // is independent of the earlier Q1-Q10 purchases.
+    Catalog q11Catalog;
+
+    q11Catalog.emplace<Book>(
+        "Q11-B1",
+        "Clean Code",
+        std::vector<std::string>{
+            "Robert C. Martin"
+        },
+        "ISBN-Q11-1",
+        "Publisher",
+        2008,
+        Money::of(100)
+    );
+
+    q11Catalog.emplace<Book>(
+        "Q11-B2",
+        "Design Patterns",
+        std::vector<std::string>{
+            "Erich Gamma"
+        },
+        "ISBN-Q11-2",
+        "Publisher",
+        1994,
+        Money::of(200)
+    );
+
+    Budget q11Budget(
+        Money::of(1000)
+    );
+
+    q11Budget.setQuota(
+        ResourceCategory::Book,
+        {
+            10,
+            Money::of(1000),
+            5
+        }
+    );
+
+    AcquisitionManager q11Acq(
+        q11Catalog,
+        q11Budget
+    );
+
+    // --------------------------------------------------------
+    // Successful all-or-nothing batch.
+    //
+    // Q11-B1 x 2 = ₹200
+    // Q11-B2 x 3 = ₹600
+    // Total       = ₹800
+    //
+    // Both requests pass, so the complete batch is committed.
+    // --------------------------------------------------------
+
+    std::cout
+        << "\nSuccessful all-or-nothing batch:\n";
+
+    const auto successfulBatch =
+        q11Acq.processBatch(
+            {
+                {"Q11-B1", 2},
+                {"Q11-B2", 3}
+            },
+            true
+        );
+
+    for (const PurchaseRecord& order :
+         successfulBatch) {
+
+        std::cout
+            << "  "
+            << order.resourceId
+            << " x "
+            << order.quantity
+            << " -> "
+            << (order.approved
+                    ? "approved"
+                    : "rejected")
+            << "\n";
+    }
+
+    std::cout
+        << "Budget spent after successful batch: "
+        << q11Budget.spent()
+        << "\n";
+
+    std::cout
+        << "Q11-B1 holdings: "
+        << q11Catalog.holdings("Q11-B1")
+        << "\n";
+
+    std::cout
+        << "Q11-B2 holdings: "
+        << q11Catalog.holdings("Q11-B2")
+        << "\n";
+
+    // --------------------------------------------------------
+    // Failed all-or-nothing batch.
+    //
+    // Q11-B1 x 1 is valid.
+    // UNKNOWN x 1 is invalid.
+    //
+    // Because all-or-nothing mode is enabled, neither request
+    // is purchased.
+    // --------------------------------------------------------
+
+    std::cout
+        << "\nFailed all-or-nothing batch:\n";
+
+    const int b1BeforeFailure =
+        q11Catalog.holdings("Q11-B1");
+
+    const int b2BeforeFailure =
+        q11Catalog.holdings("Q11-B2");
+
+    const Money spentBeforeFailure =
+        q11Budget.spent();
+
+    const auto failedBatch =
+        q11Acq.processBatch(
+            {
+                {"Q11-B1", 1},
+                {"UNKNOWN", 1}
+            },
+            true
+        );
+
+    for (const PurchaseRecord& order :
+         failedBatch) {
+
+        std::cout
+            << "  "
+            << order.resourceId
+            << " x "
+            << order.quantity
+            << " -> "
+            << (order.approved
+                    ? "approved"
+                    : "rejected");
+
+        if (!order.reason.empty()) {
+            std::cout
+                << " | "
+                << order.reason;
+        }
+
+        std::cout
+            << "\n";
+    }
+
+    std::cout
+        << "Budget spent after failed batch: "
+        << q11Budget.spent()
+        << "\n";
+
+    std::cout
+        << "Q11-B1 holdings after failed batch: "
+        << q11Catalog.holdings("Q11-B1")
+        << "\n";
+
+    std::cout
+        << "Q11-B2 holdings after failed batch: "
+        << q11Catalog.holdings("Q11-B2")
+        << "\n";
+
+    std::cout
+        << "Atomicity check: "
+        << (
+            q11Budget.spent() == spentBeforeFailure &&
+            q11Catalog.holdings("Q11-B1")
+                == b1BeforeFailure &&
+            q11Catalog.holdings("Q11-B2")
+                == b2BeforeFailure
+                ? "nothing was purchased"
+                : "state changed"
+        )
+        << "\n";
+
     return 0;
 }
