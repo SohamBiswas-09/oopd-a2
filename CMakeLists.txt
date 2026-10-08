@@ -12,10 +12,13 @@ add_library(bookmgmt
     src/ElectronicResource.cpp
     src/EBook.cpp
     src/Journal.cpp
+    src/AudioBook.cpp
+    src/Thesis.cpp
     src/Budget.cpp
     src/Catalog.cpp
     src/Acquisition.cpp
 )
+
 target_include_directories(bookmgmt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(MSVC)

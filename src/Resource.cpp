@@ -8,11 +8,25 @@ namespace bookmgmt {
 
 const char* categoryName(ResourceCategory c) {
     switch (c) {
-        case ResourceCategory::Book: return "Book";
-        case ResourceCategory::ElectronicResource: return "ElectronicResource";
-        case ResourceCategory::Journal: return "Journal";
-        case ResourceCategory::EBook: return "EBook";
+    case ResourceCategory::Book:
+        return "Book";
+
+    case ResourceCategory::ElectronicResource:
+        return "ElectronicResource";
+
+    case ResourceCategory::Journal:
+        return "Journal";
+
+    case ResourceCategory::EBook:
+        return "EBook";
+
+    case ResourceCategory::AudioBook:
+        return "AudioBook";
+
+    case ResourceCategory::Thesis:
+        return "Thesis";
     }
+
     return "Unknown";
 }
 
