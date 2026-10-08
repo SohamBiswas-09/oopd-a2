@@ -8,6 +8,7 @@
 #include "bookmgmt/bookmgmt.h"
 
 using namespace bookmgmt;
+static void testJournal();
 
 static int g_failures = 0;
 static int g_checks = 0;
@@ -166,9 +167,39 @@ static void testAcquisition() {
 int main() {
     testMoney();
     testResourcesAndCost();
+    testJournal();
     testCatalog();
     testBudget();
     testAcquisition();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }
+
+static void testJournal() {
+    Journal j("J1", "ACM Computing Surveys", "1234-5678",
+              12, "ACM", 2026, Money::of(50));
+
+    CHECK(j.category() == ResourceCategory::Journal);
+    CHECK(j.issn() == "1234-5678");
+    CHECK(j.issuesPerYear() == 12);
+    CHECK(j.subscriptionYears() == 1);
+    CHECK(j.costFor(3) == Money::of(150));
+
+    Journal j2("J2", "Nature", "8765-4321",
+               52, "Springer", 2026, Money::of(100), 3);
+
+    CHECK(j2.subscriptionYears() == 3);
+    CHECK(j2.costFor(2) == Money::of(600));
+
+    CHECK_THROWS(
+        Journal("J3", "Invalid Journal", "0000-0000",
+                12, "Publisher", 2026, Money::of(50), 0),
+        std::invalid_argument);
+
+    std::stringstream os;
+    j.print(os);
+    CHECK(os.str().find("1234-5678") != std::string::npos);
+    CHECK(os.str().find("issues per year: 12") != std::string::npos);
+    CHECK(os.str().find("subscription years: 1") != std::string::npos);
+}
+
