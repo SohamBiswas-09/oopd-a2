@@ -1,5 +1,6 @@
 #include "bookmgmt/Journal.h"
 
+#include <cstdint>
 #include <ostream>
 #include <stdexcept>
 #include <utility>
@@ -22,7 +23,17 @@ Journal::Journal(std::string id, std::string title, std::string issn,
 
 Money Journal::costFor(int copies) const {
     requirePositive(copies);
-    return unitPrice() * copies * subscriptionYears_;
+
+    Money total = unitPrice() * copies * subscriptionYears_;
+
+    if (copies >= 10) {
+        const std::int64_t discountedMinorUnits =
+            (total.minorUnits() * 90) / 100;
+
+        return Money::fromMinor(discountedMinorUnits);
+    }
+
+    return total;
 }
 
 void Journal::printDetails(std::ostream& os) const {

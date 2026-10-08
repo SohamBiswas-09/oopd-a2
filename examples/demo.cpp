@@ -96,12 +96,12 @@ int main() {
 
     budget.setQuota(
         ResourceCategory::Book,
-        {10, Money::of(8000)}
+        {20, Money::of(10000)}
     );
 
     budget.setQuota(
         ResourceCategory::ElectronicResource,
-        {40, Money::of(12000)}
+        {100, Money::of(12000)}
     );
 
     // Q2: EBook has its own resource category.
@@ -127,9 +127,33 @@ int main() {
               << acq.quote("B002", 5)
               << "\n";
 
-    std::cout << "20 seats of R001  = "
-              << acq.quote("R001", 20)
-              << "  (incl. platform fee)\n";
+    // Q5: Print items get 10% off for 10 or more copies.
+    std::cout << "\n=== Q5 Bulk Discounts ===\n";
+
+    std::cout << "9 copies of B001  = "
+              << acq.quote("B001", 9)
+              << "  (no bulk discount)\n";
+
+    std::cout << "10 copies of B001 = "
+              << acq.quote("B001", 10)
+              << "  (10% bulk discount)\n";
+
+    // Q4 + Q5 together:
+    // B002 is hardcover, so its listed price first increases by 20%.
+    // At 10 copies, the 10% bulk discount is then applied.
+    std::cout << "10 copies of B002 = "
+              << acq.quote("B002", 10)
+              << "  (hardcover + bulk discount)\n";
+
+    std::cout << "\n=== Electronic Seat Pricing ===\n";
+
+    std::cout << "50 seats of R001  = "
+              << acq.quote("R001", 50)
+              << "  (first 50 at full price)\n";
+
+    std::cout << "60 seats of R001  = "
+              << acq.quote("R001", 60)
+              << "  (seats beyond 50 at half price)\n";
 
     std::cout << "5 seats of E001   = "
               << acq.quote("E001", 5)
@@ -137,12 +161,12 @@ int main() {
 
     acq.processBatch({
         {"B001", 4},   // 1800  ok
-        {"B002", 5},   // 6000  ok  -> book spend 7800
-        {"B001", 1},   // 450   rejected: book spend quota (200 left)
+        {"B002", 5},   // 7200  ok
+        {"B001", 1},   // 450   ok
         {"R001", 20},  // 5000  ok
-        {"R002", 25},  // 10000 rejected: e-resource unit quota (20 seats left)
-        {"R002", 15},  // 6000  ok  -> e-resource spend 11000
-        {"R002", 5},   // 2000  rejected: e-resource spend quota (1000 left)
+        {"R002", 25},  // 10000 ok
+        {"R002", 15},  // 6000  rejected if electronic spend quota is exceeded
+        {"R002", 5},   // 2000
         {"E001", 5},   // EBook purchase
         {"X999", 1},   // rejected: unknown id
     });

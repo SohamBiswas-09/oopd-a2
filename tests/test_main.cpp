@@ -13,6 +13,7 @@ using namespace bookmgmt;
 static void testJournal();
 static void testEBook();
 static void testBookPricing();
+static void testBulkDiscounts();
 
 static int g_failures = 0;
 static int g_checks = 0;
@@ -329,6 +330,162 @@ static void testBookPricing() {
 }
 
 
+/*
+ * Q5: Bulk discounts
+ *
+ * Print items:
+ *   - 1 to 9 copies: normal price
+ *   - 10 or more copies: 10% discount
+ *
+ * Electronic resources:
+ *   - first 50 seats: full price
+ *   - every seat after the 50th: half price
+ */
+static void testBulkDiscounts() {
+    // Paperback:
+    // 9 copies -> no discount
+    // 10 copies -> 10% discount
+    // 20 copies -> 10% discount
+    Book paperback(
+        "Q5-BP",
+        "Bulk Paperback",
+        {"Author"},
+        "ISBN-Q5-BP",
+        "Publisher",
+        2026,
+        Money::of(100),
+        1,
+        Binding::Paperback
+    );
+
+    CHECK(paperback.costFor(9) == Money::of(900));
+    CHECK(paperback.costFor(10) == Money::of(900));
+    CHECK(paperback.costFor(20) == Money::of(1800));
+
+    // Hardcover:
+    // Q4's 20% price increase is applied first.
+    // Q5's 10% bulk discount is then applied.
+    //
+    // Listed price = 100.00
+    // Hardcover price = 120.00
+    //
+    // 9 copies:
+    // 120 * 9 = 1080
+    //
+    // 10 copies:
+    // 120 * 10 = 1200
+    // 10% discount -> 1080
+    Book hardcover(
+        "Q5-BH",
+        "Bulk Hardcover",
+        {"Author"},
+        "ISBN-Q5-BH",
+        "Publisher",
+        2026,
+        Money::of(100),
+        1,
+        Binding::Hardcover
+    );
+
+    CHECK(hardcover.costFor(9) == Money::of(1080));
+    CHECK(hardcover.costFor(10) == Money::of(1080));
+    CHECK(hardcover.costFor(20) == Money::of(2160));
+
+    // Journal:
+    // unit price = 100
+    // subscription = 2 years
+    //
+    // 9 copies:
+    // 100 * 9 * 2 = 1800
+    //
+    // 10 copies:
+    // 100 * 10 * 2 = 2000
+    // 10% discount -> 1800
+    Journal journal(
+        "Q5-J",
+        "Bulk Journal",
+        "ISSN-Q5",
+        12,
+        "Publisher",
+        2026,
+        Money::of(100),
+        2
+    );
+
+    CHECK(journal.costFor(9) == Money::of(1800));
+    CHECK(journal.costFor(10) == Money::of(1800));
+    CHECK(journal.costFor(20) == Money::of(3600));
+
+    // Electronic resource:
+    // first 50 seats are full price,
+    // every seat after 50 costs half price.
+
+    EBook ebook(
+    "Q5-E",
+    "Bulk EBook",
+    {"Author"},
+    "ISBN-Q5-E",
+    "Publisher",
+    2026,
+    Money::of(100),
+    "https://example.com/ebook",
+    LicenseModel::AnnualSubscription,
+    Money::of(0),
+    "PDF",
+    true
+);
+    // 49 seats:
+    // 49 * 100 = 4900
+    CHECK(ebook.costFor(49) == Money::of(4900));
+
+    // 50 seats:
+    // 50 * 100 = 5000
+    CHECK(ebook.costFor(50) == Money::of(5000));
+
+    // 51 seats:
+    // 50 * 100 + 1 * 50 = 5050
+    CHECK(ebook.costFor(51) == Money::of(5050));
+
+    // 60 seats:
+    // 50 * 100 + 10 * 50 = 5500
+    CHECK(ebook.costFor(60) == Money::of(5500));
+
+    // Platform fee remains unchanged.
+    ElectronicResource electronic(
+        "Q5-ER",
+        "Bulk Electronic Resource",
+        "Publisher",
+        2026,
+        Money::of(100),
+        "https://example.com/resource",
+        LicenseModel::AnnualSubscription,
+        Money::of(500)
+    );
+
+    // 50 seats:
+    // 500 platform fee + 50 * 100 = 5500
+    CHECK(electronic.costFor(50) == Money::of(5500));
+
+    // 60 seats:
+    // 500 platform fee
+    // + 50 * 100
+    // + 10 * 50
+    // = 6000
+    CHECK(electronic.costFor(60) == Money::of(6000));
+
+    // Quantity must still be positive.
+    CHECK_THROWS(
+        paperback.costFor(0),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        electronic.costFor(0),
+        std::invalid_argument
+    );
+}
+
+
 static void testCatalog() {
     Catalog c;
 
@@ -605,6 +762,7 @@ int main() {
     testJournal();
     testEBook();
     testBookPricing();
+    testBulkDiscounts();
     testCatalog();
     testBudget();
     testAcquisition();

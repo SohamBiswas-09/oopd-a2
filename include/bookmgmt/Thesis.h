@@ -6,17 +6,6 @@
 
 namespace bookmgmt {
 
-// A Thesis is derived directly from Resource because it is a catalogue
-// resource but does not require the electronic licensing and platform-fee
-// behavior provided by ElectronicResource.
-//
-// A thesis stores its academic metadata:
-//   - university
-//   - degree
-//   - supervisor
-//
-// Thesis is usually free of cost, so a thesis can normally be created
-// with Money::of(0) as its unit price.
 class Thesis : public Resource {
 public:
     Thesis(std::string id,
@@ -43,6 +32,8 @@ public:
     ResourceCategory category() const override {
         return ResourceCategory::Thesis;
     }
+
+    Money costFor(int copies) const override;
 
 protected:
     void printDetails(std::ostream& os) const override;

@@ -1,33 +1,64 @@
 #include "bookmgmt/ElectronicResource.h"
 
+#include <cstdint>
 #include <ostream>
 #include <stdexcept>
+#include <utility>
 
 namespace bookmgmt {
 
 const char* licenseName(LicenseModel m) {
     switch (m) {
-        case LicenseModel::Perpetual: return "Perpetual";
-        case LicenseModel::AnnualSubscription: return "Annual subscription";
+        case LicenseModel::Perpetual:
+            return "Perpetual";
+
+        case LicenseModel::AnnualSubscription:
+            return "Annual subscription";
     }
+
     return "Unknown";
 }
 
-ElectronicResource::ElectronicResource(std::string id, std::string title,
-                                       std::string publisher, int year,
-                                       Money pricePerSeat, std::string accessUrl,
-                                       LicenseModel license, Money platformFee)
-    : Resource(std::move(id), std::move(title), std::move(publisher), year, pricePerSeat),
+ElectronicResource::ElectronicResource(
+    std::string id,
+    std::string title,
+    std::string publisher,
+    int year,
+    Money pricePerSeat,
+    std::string accessUrl,
+    LicenseModel license,
+    Money platformFee)
+    : Resource(std::move(id),
+               std::move(title),
+               std::move(publisher),
+               year,
+               pricePerSeat),
       accessUrl_(std::move(accessUrl)),
       license_(license),
       platformFee_(platformFee) {
-    if (platformFee_.isNegative())
-        throw std::invalid_argument("platform fee must not be negative");
+    if (platformFee_.isNegative()) {
+        throw std::invalid_argument(
+            "platform fee must not be negative");
+    }
 }
 
 Money ElectronicResource::costFor(int seats) const {
     requirePositive(seats);
-    return platformFee_ + unitPrice() * seats;
+
+    const int fullPriceSeats = seats < 50 ? seats : 50;
+    const int discountedSeats = seats > 50 ? seats - 50 : 0;
+
+    Money total = platformFee_
+                + unitPrice() * fullPriceSeats;
+
+    if (discountedSeats > 0) {
+        const std::int64_t halfPrice =
+            unitPrice().minorUnits() / 2;
+
+        total += Money::fromMinor(halfPrice) * discountedSeats;
+    }
+
+    return total;
 }
 
 void ElectronicResource::printDetails(std::ostream& os) const {

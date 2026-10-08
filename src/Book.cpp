@@ -1,5 +1,6 @@
 #include "bookmgmt/Book.h"
 
+#include <cstdint>
 #include <ostream>
 #include <stdexcept>
 #include <utility>
@@ -40,22 +41,27 @@ Book::Book(std::string id, std::string title, std::vector<std::string> authors,
 Money Book::costFor(int copies) const {
     requirePositive(copies);
 
-    // Paperback books use the normal listed price.
+    Money total;
+
     if (binding_ == Binding::Paperback) {
-        return unitPrice() * copies;
+        total = unitPrice() * copies;
+    } else {
+        const std::int64_t listedPrice = unitPrice().minorUnits();
+
+        const std::int64_t hardcoverPrice =
+            listedPrice + (listedPrice * 20) / 100;
+
+        total = Money::fromMinor(hardcoverPrice) * copies;
     }
 
-    // Hardcover books cost 20% more.
-    //
-    // Money stores the amount in minor units (paise/cents),
-    // so we perform the percentage calculation using integers
-    // instead of floating-point arithmetic.
-    const std::int64_t listedPrice = unitPrice().minorUnits();
+    if (copies >= 10) {
+        const std::int64_t discountedMinorUnits =
+            (total.minorUnits() * 90) / 100;
 
-    const std::int64_t hardcoverPrice =
-        listedPrice + (listedPrice * 20) / 100;
+        return Money::fromMinor(discountedMinorUnits);
+    }
 
-    return Money::fromMinor(hardcoverPrice) * copies;
+    return total;
 }
 
 void Book::printDetails(std::ostream& os) const {
