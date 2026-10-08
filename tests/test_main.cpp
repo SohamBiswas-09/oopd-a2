@@ -12,6 +12,7 @@ using namespace bookmgmt;
 
 static void testJournal();
 static void testEBook();
+static void testBookPricing();
 
 static int g_failures = 0;
 static int g_checks = 0;
@@ -21,21 +22,21 @@ static int g_checks = 0;
         ++g_checks;                                                              \
         if (!(cond)) {                                                           \
             ++g_failures;                                                        \
-            std::cerr << __FILE__ << ":" << __LINE__                         \
+            std::cerr << __FILE__ << ":" << __LINE__                            \
                       << ": CHECK failed: " #cond << "\n";                      \
         }                                                                        \
     } while (0)
 
-#define CHECK_THROWS(expr, ExType)            \
-    do {                                      \
-        bool thrown_ = false;                 \
-        try {                                 \
-            (void)(expr);                     \
-        } catch (const ExType&) {             \
-            thrown_ = true;                   \
-        } catch (...) {                       \
-        }                                     \
-        CHECK(thrown_ && "expected " #ExType); \
+#define CHECK_THROWS(expr, ExType)                                               \
+    do {                                                                         \
+        bool thrown_ = false;                                                    \
+        try {                                                                    \
+            (void)(expr);                                                        \
+        } catch (const ExType&) {                                                \
+            thrown_ = true;                                                      \
+        } catch (...) {                                                          \
+        }                                                                        \
+        CHECK(thrown_ && "expected " #ExType);                                  \
     } while (0)
 
 
@@ -98,6 +99,19 @@ static void testResourcesAndCost() {
 }
 
 
+/*
+ * Q1: Journal
+ *
+ * Tests:
+ *   - Journal category
+ *   - ISSN
+ *   - issues per year
+ *   - default subscription years
+ *   - subscription pricing
+ *   - custom subscription years
+ *   - invalid subscription years
+ *   - printed details
+ */
 static void testJournal() {
     Journal j(
         "J1",
@@ -255,6 +269,63 @@ static void testEBook() {
     // = 0 + 15 * 2
     // = 30
     CHECK(e2.costFor(2) == Money::of(30));
+}
+
+
+/*
+ * Q4: Hardcover pricing
+ *
+ * Paperback books use their listed unit price.
+ * Hardcover books cost 20% more than their listed unit price.
+ */
+static void testBookPricing() {
+    // Paperback books use the listed unit price.
+    Book paperback(
+        "BP1",
+        "Paperback Book",
+        {"Author"},
+        "ISBN-P",
+        "Publisher",
+        2026,
+        Money::of(100),
+        1,
+        Binding::Paperback
+    );
+
+    CHECK(paperback.binding() == Binding::Paperback);
+    CHECK(paperback.costFor(1) == Money::of(100));
+    CHECK(paperback.costFor(3) == Money::of(300));
+
+    // Hardcover books cost 20% more than the listed unit price.
+    //
+    // Listed price = 100.00
+    // 20% increase = 20.00
+    // Hardcover price = 120.00
+    Book hardcover(
+        "BH1",
+        "Hardcover Book",
+        {"Author"},
+        "ISBN-H",
+        "Publisher",
+        2026,
+        Money::of(100),
+        1,
+        Binding::Hardcover
+    );
+
+    CHECK(hardcover.binding() == Binding::Hardcover);
+    CHECK(hardcover.costFor(1) == Money::of(120));
+
+    // Multiple hardcover copies.
+    //
+    // 120.00 * 3 = 360.00
+    CHECK(hardcover.costFor(3) == Money::of(360));
+
+    // Quantity must still be positive.
+    CHECK_THROWS(
+        hardcover.costFor(0),
+        std::invalid_argument
+    );
 }
 
 
@@ -533,6 +604,7 @@ int main() {
     testResourcesAndCost();
     testJournal();
     testEBook();
+    testBookPricing();
     testCatalog();
     testBudget();
     testAcquisition();

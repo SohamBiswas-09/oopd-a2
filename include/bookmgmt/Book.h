@@ -20,7 +20,13 @@ public:
     int edition() const { return edition_; }
     Binding binding() const { return binding_; }
 
-    ResourceCategory category() const override { return ResourceCategory::Book; }
+    ResourceCategory category() const override {
+        return ResourceCategory::Book;
+    }
+
+    // Q4:
+    // Hardcover books cost 20% more than their listed unit price.
+    Money costFor(int copies) const override;
 
 protected:
     void printDetails(std::ostream& os) const override;
@@ -32,7 +38,8 @@ private:
     Binding binding_;
 };
 
-// Joins a list of author names: {"A", "B", "C"} -> "A, B and C"
+// Joins a list of author names:
+// {"A", "B", "C"} -> "A, B and C"
 std::string joinAuthors(const std::vector<std::string>& authors);
 
 }  // namespace bookmgmt

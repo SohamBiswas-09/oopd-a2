@@ -114,6 +114,15 @@ int main() {
 
     std::cout << "\n=== Quotes ===\n";
 
+    // Q4: Hardcover books cost 20% more than their listed unit price.
+    std::cout << "B002 listed price   = "
+              << catalog.get("B002").unitPrice()
+              << "\n";
+
+    std::cout << "B002 hardcover cost = "
+              << catalog.get("B002").costFor(1)
+              << "\n";
+
     std::cout << "5 copies of B002  = "
               << acq.quote("B002", 5)
               << "\n";
