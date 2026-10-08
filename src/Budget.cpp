@@ -11,7 +11,7 @@ namespace bookmgmt {
 namespace {
 // Every category, in the order Budget::print() lists them.
 const ResourceCategory kAllCategories[] = {ResourceCategory::Book,
-                                           ResourceCategory::ElectronicResource, ResourceCategory::Journal};
+                                           ResourceCategory::ElectronicResource, ResourceCategory::Journal, ResourceCategory::EBook};
 }
 
 Budget::Budget(Money total) : total_(total) {
