@@ -10,6 +10,10 @@
 
 namespace bookmgmt {
 
+// ======================================================
+// Constructor
+// ======================================================
+
 AcquisitionManager::AcquisitionManager(
     Catalog& catalog,
     Budget& budget)
@@ -17,12 +21,22 @@ AcquisitionManager::AcquisitionManager(
       budget_(budget) {
 }
 
+
+// ======================================================
+// Quote
+// ======================================================
+
 Money AcquisitionManager::quote(
     const std::string& id,
     int quantity) const {
 
     return catalog_.get(id).costFor(quantity);
 }
+
+
+// ======================================================
+// Q6: Tax configuration
+// ======================================================
 
 void AcquisitionManager::setPrintTaxRate(
     double percent) {
@@ -36,6 +50,7 @@ void AcquisitionManager::setPrintTaxRate(
     printTaxRate_ = percent;
 }
 
+
 void AcquisitionManager::setElectronicTaxRate(
     double percent) {
 
@@ -47,6 +62,11 @@ void AcquisitionManager::setElectronicTaxRate(
 
     electronicTaxRate_ = percent;
 }
+
+
+// ======================================================
+// Q6: Calculate tax
+// ======================================================
 
 Money AcquisitionManager::taxFor(
     const Resource& r,
@@ -69,62 +89,209 @@ Money AcquisitionManager::taxFor(
     );
 }
 
+
+// ======================================================
+// Q9: Department management
+// ======================================================
+
+void AcquisitionManager::addDepartment(
+    const std::string& department,
+    Money budget) {
+
+    if (department.empty()) {
+        throw std::invalid_argument(
+            "department name must not be empty"
+        );
+    }
+
+    if (departmentBudgets_.find(department)
+        != departmentBudgets_.end()) {
+
+        throw std::invalid_argument(
+            "department already exists: "
+            + department
+        );
+    }
+
+    departmentBudgets_.emplace(
+        department,
+        Budget(budget)
+    );
+}
+
+
+bool AcquisitionManager::hasDepartment(
+    const std::string& department) const {
+
+    return departmentBudgets_.find(department)
+        != departmentBudgets_.end();
+}
+
+
+Budget& AcquisitionManager::departmentBudget(
+    const std::string& department) {
+
+    auto it =
+        departmentBudgets_.find(department);
+
+    if (it == departmentBudgets_.end()) {
+        throw std::invalid_argument(
+            "department not found: "
+            + department
+        );
+    }
+
+    return it->second;
+}
+
+
+const Budget& AcquisitionManager::departmentBudget(
+    const std::string& department) const {
+
+    auto it =
+        departmentBudgets_.find(department);
+
+    if (it == departmentBudgets_.end()) {
+        throw std::invalid_argument(
+            "department not found: "
+            + department
+        );
+    }
+
+    return it->second;
+}
+
+
+// ======================================================
+// Q9: Select the correct budget
+// ======================================================
+
+Budget& AcquisitionManager::budgetFor(
+    const std::string& department) {
+
+    if (department.empty()) {
+        return budget_;
+    }
+
+    return departmentBudget(department);
+}
+
+
+const Budget& AcquisitionManager::budgetFor(
+    const std::string& department) const {
+
+    if (department.empty()) {
+        return budget_;
+    }
+
+    return departmentBudget(department);
+}
+
+
+// ======================================================
+// Q7: Check purchase using default budget
+// ======================================================
+
 bool AcquisitionManager::canPurchase(
+    const std::string& id,
+    int quantity,
+    std::string* reason) const {
+
+    return canPurchase(
+        "",
+        id,
+        quantity,
+        reason
+    );
+}
+
+
+// ======================================================
+// Q9: Check purchase using department budget
+// ======================================================
+
+bool AcquisitionManager::canPurchase(
+    const std::string& department,
     const std::string& id,
     int quantity,
     std::string* reason) const {
 
     std::string why;
 
-    if (const Resource* r = catalog_.find(id)) {
+    // --------------------------------------------------
+    // Find resource.
+    // --------------------------------------------------
 
-        if (quantity <= 0) {
+    const Resource* r =
+        catalog_.find(id);
 
-            why = "quantity must be positive";
+    if (!r) {
 
-        } else {
+        why =
+            "resource not found: "
+            + id;
 
-            // ------------------------------------------
-            // Calculate pre-tax cost.
-            // ------------------------------------------
+    } else if (quantity <= 0) {
 
-            const Money preTaxCost =
-                r->costFor(quantity);
-
-            // ------------------------------------------
-            // Calculate tax.
-            // ------------------------------------------
-
-            const Money tax =
-                taxFor(*r, preTaxCost);
-
-            // ------------------------------------------
-            // Calculate final cost.
-            // ------------------------------------------
-
-            const Money postTaxCost =
-                preTaxCost + tax;
-
-            // ------------------------------------------
-            // Q6 + Q7:
-            //
-            // Budget checks:
-            //   - post-tax cost
-            //   - resource title
-            // ------------------------------------------
-
-            why = budget_.check(
-                r->category(),
-                quantity,
-                postTaxCost,
-                r->title()
-            );
-        }
+        why =
+            "quantity must be positive";
 
     } else {
 
-        why =
-            "resource not found: " + id;
+        // --------------------------------------------------
+        // Calculate pre-tax cost.
+        // --------------------------------------------------
+
+        const Money preTaxCost =
+            r->costFor(quantity);
+
+        // --------------------------------------------------
+        // Calculate tax.
+        // --------------------------------------------------
+
+        const Money tax =
+            taxFor(
+                *r,
+                preTaxCost
+            );
+
+        // --------------------------------------------------
+        // Calculate final cost.
+        // --------------------------------------------------
+
+        const Money postTaxCost =
+            preTaxCost + tax;
+
+        // --------------------------------------------------
+        // Check the selected budget.
+        //
+        // Q6:
+        //   Use post-tax cost.
+        //
+        // Q7:
+        //   Pass the resource title.
+        //
+        // Q9:
+        //   Use the department's budget.
+        // --------------------------------------------------
+
+        try {
+
+            const Budget& selectedBudget =
+                budgetFor(department);
+
+            why =
+                selectedBudget.check(
+                    r->category(),
+                    quantity,
+                    postTaxCost,
+                    r->title()
+                );
+
+        } catch (const std::invalid_argument& e) {
+
+            why = e.what();
+        }
     }
 
     if (reason) {
@@ -133,6 +300,11 @@ bool AcquisitionManager::canPurchase(
 
     return why.empty();
 }
+
+
+// ======================================================
+// Create purchase-history record
+// ======================================================
 
 PurchaseRecord& AcquisitionManager::record(
     const Resource* r,
@@ -143,18 +315,23 @@ PurchaseRecord& AcquisitionManager::record(
     Money postTaxCost,
     bool approved,
     std::string reason,
-    bool cancelled) {
+    bool cancelled,
+    const std::string& department) {
 
     history_.push_back(
         PurchaseRecord{
             nextOrderNo_++,
+
             id,
+
             r
                 ? r->title()
                 : std::string("(unknown)"),
+
             r
                 ? r->category()
                 : ResourceCategory::Book,
+
             qty,
 
             preTaxCost,
@@ -166,75 +343,115 @@ PurchaseRecord& AcquisitionManager::record(
             postTaxCost,
 
             approved,
+
             std::move(reason),
-            cancelled
+
+            cancelled,
+
+            department
         }
     );
 
     return history_.back();
 }
 
+
+// ======================================================
+// Original Q1-Q8 purchase API
+// Uses the default budget.
+// ======================================================
+
 const PurchaseRecord& AcquisitionManager::purchase(
     const std::string& id,
     int quantity) {
 
-    // ----------------------------------------------
+    return purchase(
+        "",
+        id,
+        quantity
+    );
+}
+
+
+// ======================================================
+// Q9: Department purchase
+// ======================================================
+
+const PurchaseRecord& AcquisitionManager::purchase(
+    const std::string& department,
+    const std::string& id,
+    int quantity) {
+
+    // --------------------------------------------------
     // Find the resource.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     const Resource& r =
         catalog_.get(id);
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Calculate original price.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     const Money preTaxCost =
         r.costFor(quantity);
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Calculate tax.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     const Money tax =
-        taxFor(r, preTaxCost);
+        taxFor(
+            r,
+            preTaxCost
+        );
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Calculate final amount.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     const Money postTaxCost =
         preTaxCost + tax;
 
-    // ----------------------------------------------
-    // Q6 + Q7:
-    //
-    // Check the budget using:
-    //   - post-tax cost
-    //   - resource title
-    //
-    // If this fails, nothing below is changed.
-    // ----------------------------------------------
+    // --------------------------------------------------
+    // Select the correct budget.
+    // --------------------------------------------------
 
-    budget_.commit(
+    Budget& selectedBudget =
+        budgetFor(department);
+
+    // --------------------------------------------------
+    // Commit against the selected budget.
+    //
+    // This checks:
+    //   1. unit quota
+    //   2. spend quota
+    //   3. overall budget
+    //   4. different-title quota
+    //
+    // If the check fails, Budget::commit throws and
+    // nothing is changed.
+    // --------------------------------------------------
+
+    selectedBudget.commit(
         r.category(),
         quantity,
         postTaxCost,
         r.title()
     );
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Update catalogue holdings.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     catalog_.addHoldings(
         id,
         quantity
     );
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Add purchase to history.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     return record(
         &r,
@@ -245,20 +462,22 @@ const PurchaseRecord& AcquisitionManager::purchase(
         postTaxCost,
         true,
         {},
-        false
+        false,
+        department
     );
 }
 
-// ------------------------------------------------------
-// Q8: Cancel an approved order.
-// ------------------------------------------------------
+
+// ======================================================
+// Q8: Cancellation
+// ======================================================
 
 const PurchaseRecord& AcquisitionManager::cancel(
     int orderNo) {
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Find the original order.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     PurchaseRecord* original = nullptr;
 
@@ -278,9 +497,9 @@ const PurchaseRecord& AcquisitionManager::cancel(
         );
     }
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Only approved purchases can be cancelled.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     if (!original->approved) {
 
@@ -289,12 +508,9 @@ const PurchaseRecord& AcquisitionManager::cancel(
         );
     }
 
-    // ----------------------------------------------
-    // Prevent duplicate cancellation.
-    //
-    // The cancellation record stores the original
-    // order number in its reason.
-    // ----------------------------------------------
+    // --------------------------------------------------
+    // The same order cannot be cancelled twice.
+    // --------------------------------------------------
 
     const std::string cancellationMarker =
         "Cancellation of order #"
@@ -312,14 +528,13 @@ const PurchaseRecord& AcquisitionManager::cancel(
         }
     }
 
-    // ----------------------------------------------
-    // Save the original order information before
-    // adding the cancellation record.
+    // --------------------------------------------------
+    // Save the original information before adding the
+    // cancellation record.
     //
-    // push_back() may reallocate history_, so we
-    // must not keep using the original pointer after
-    // adding a new record.
-    // ----------------------------------------------
+    // push_back() may reallocate history_, so we must
+    // not keep using the original pointer afterwards.
+    // --------------------------------------------------
 
     const std::string id =
         original->resourceId;
@@ -342,34 +557,53 @@ const PurchaseRecord& AcquisitionManager::cancel(
     const Money postTaxCost =
         original->postTaxCost;
 
-    // ----------------------------------------------
-    // Refund budget and quota usage.
-    // ----------------------------------------------
+    const std::string department =
+        original->department;
 
-    budget_.refund(
+    // --------------------------------------------------
+    // Select the budget that originally paid for the
+    // purchase.
+    // --------------------------------------------------
+
+    Budget& selectedBudget =
+        budgetFor(department);
+
+    // --------------------------------------------------
+    // Refund:
+    //   - units
+    //   - category spending
+    //   - title usage
+    //   - overall spending
+    // --------------------------------------------------
+
+    selectedBudget.refund(
         category,
         quantity,
         postTaxCost,
         title
     );
 
-    // ----------------------------------------------
+    // --------------------------------------------------
     // Reduce catalogue holdings.
-    // ----------------------------------------------
+    // --------------------------------------------------
 
     catalog_.addHoldings(
         id,
         -quantity
     );
 
-    // ----------------------------------------------
-    // Keep the original purchase record unchanged.
-    //
-    // Add a separate cancellation record.
-    // ----------------------------------------------
+    // --------------------------------------------------
+    // Find the resource again for the cancellation
+    // record.
+    // --------------------------------------------------
 
     Resource* resource =
         catalog_.find(id);
+
+    // --------------------------------------------------
+    // Keep the original purchase record unchanged.
+    // Add a separate cancellation record.
+    // --------------------------------------------------
 
     return record(
         resource,
@@ -380,9 +614,15 @@ const PurchaseRecord& AcquisitionManager::cancel(
         postTaxCost,
         false,
         cancellationMarker,
-        true
+        true,
+        department
     );
 }
+
+
+// ======================================================
+// Q8 + Q9: Batch processing
+// ======================================================
 
 std::vector<PurchaseRecord>
 AcquisitionManager::processBatch(
@@ -390,7 +630,9 @@ AcquisitionManager::processBatch(
 
     std::vector<PurchaseRecord> results;
 
-    results.reserve(reqs.size());
+    results.reserve(
+        reqs.size()
+    );
 
     for (const auto& req : reqs) {
 
@@ -402,6 +644,10 @@ AcquisitionManager::processBatch(
         Money postTaxCost;
 
         std::string why;
+
+        // --------------------------------------------------
+        // Find resource.
+        // --------------------------------------------------
 
         if (!r) {
 
@@ -416,38 +662,58 @@ AcquisitionManager::processBatch(
 
         } else {
 
-            // --------------------------------------
+            // --------------------------------------------------
             // Calculate tax breakdown.
-            // --------------------------------------
+            // --------------------------------------------------
 
             preTaxCost =
-                r->costFor(req.quantity);
+                r->costFor(
+                    req.quantity
+                );
 
             tax =
-                taxFor(*r, preTaxCost);
+                taxFor(
+                    *r,
+                    preTaxCost
+                );
 
             postTaxCost =
                 preTaxCost + tax;
 
-            // --------------------------------------
-            // Q6 + Q7:
-            //
-            // Check using post-tax cost and title.
-            // --------------------------------------
+            // --------------------------------------------------
+            // Check the correct department budget.
+            // --------------------------------------------------
 
-            why = budget_.check(
-                r->category(),
-                req.quantity,
-                postTaxCost,
-                r->title()
-            );
+            try {
+
+                const Budget& selectedBudget =
+                    budgetFor(
+                        req.department
+                    );
+
+                why =
+                    selectedBudget.check(
+                        r->category(),
+                        req.quantity,
+                        postTaxCost,
+                        r->title()
+                    );
+
+            } catch (const std::invalid_argument& e) {
+
+                why = e.what();
+            }
         }
+
+        // --------------------------------------------------
+        // Approved request.
+        // --------------------------------------------------
 
         if (why.empty()) {
 
-            // purchase() performs the actual update.
             results.push_back(
                 purchase(
+                    req.department,
                     req.resourceId,
                     req.quantity
                 )
@@ -455,7 +721,10 @@ AcquisitionManager::processBatch(
 
         } else {
 
+            // --------------------------------------------------
             // Rejected requests are still recorded.
+            // --------------------------------------------------
+
             results.push_back(
                 record(
                     r,
@@ -466,7 +735,8 @@ AcquisitionManager::processBatch(
                     postTaxCost,
                     false,
                     why,
-                    false
+                    false,
+                    req.department
                 )
             );
         }
@@ -475,14 +745,10 @@ AcquisitionManager::processBatch(
     return results;
 }
 
-// ------------------------------------------------------
-// Calculate total active spending.
-//
-// The original purchase record remains in history after
-// cancellation. Therefore, we check whether a separate
-// cancellation record refers to that purchase before
-// adding its cost.
-// ------------------------------------------------------
+
+// ======================================================
+// Total spent
+// ======================================================
 
 Money AcquisitionManager::totalSpent() const {
 
@@ -490,9 +756,14 @@ Money AcquisitionManager::totalSpent() const {
 
     for (const auto& rec : history_) {
 
-        // Rejected purchases and cancellation records
-        // are not active spending.
-        if (!rec.approved || rec.cancelled) {
+        // --------------------------------------------------
+        // Cancellation records are not spending.
+        //
+        // Also skip an approved order when a corresponding
+        // cancellation record exists.
+        // --------------------------------------------------
+
+        if (!rec.approved) {
             continue;
         }
 
@@ -500,20 +771,19 @@ Money AcquisitionManager::totalSpent() const {
             "Cancellation of order #"
             + std::to_string(rec.orderNo);
 
-        bool wasCancelled = false;
+        bool cancelled = false;
 
-        for (const auto& cancellation : history_) {
+        for (const auto& other : history_) {
 
-            if (cancellation.cancelled &&
-                cancellation.reason ==
-                    cancellationMarker) {
+            if (other.cancelled &&
+                other.reason == cancellationMarker) {
 
-                wasCancelled = true;
+                cancelled = true;
                 break;
             }
         }
 
-        if (!wasCancelled) {
+        if (!cancelled) {
             sum += rec.postTaxCost;
         }
     }
@@ -521,20 +791,49 @@ Money AcquisitionManager::totalSpent() const {
     return sum;
 }
 
+
+// ======================================================
+// Print acquisition report
+// ======================================================
+
 void AcquisitionManager::printReport(
     std::ostream& os) const {
 
     os << "Order history ("
        << history_.size()
-       << " orders)\n";
+       << " records):\n";
 
     for (const auto& rec : history_) {
 
-        os << "  #"
-           << std::setw(3)
-           << std::left
+        os << "Order #"
            << rec.orderNo
-           << " ";
+           << " | ";
+
+        // --------------------------------------------------
+        // Department information.
+        // --------------------------------------------------
+
+        if (!rec.department.empty()) {
+
+            os << "Department: "
+               << rec.department
+               << " | ";
+        }
+
+        os << rec.title
+           << " | quantity: "
+           << rec.quantity
+           << " | pre-tax: "
+           << rec.preTaxCost
+           << " | tax: "
+           << rec.tax
+           << " | post-tax: "
+           << rec.postTaxCost
+           << " | ";
+
+        // --------------------------------------------------
+        // Status.
+        // --------------------------------------------------
 
         if (rec.cancelled) {
 
@@ -549,24 +848,13 @@ void AcquisitionManager::printReport(
             os << "REJECTED";
         }
 
-        os << "  "
-           << std::setw(6)
-           << rec.resourceId
-           << " x"
-           << std::setw(3)
-           << rec.quantity
-           << "  pre-tax: "
-           << rec.preTaxCost
-           << "  tax: "
-           << rec.tax
-           << "  post-tax: "
-           << rec.postTaxCost
-           << "  "
-           << rec.title;
+        // --------------------------------------------------
+        // Rejection/cancellation reason.
+        // --------------------------------------------------
 
-        if (!rec.approved || rec.cancelled) {
+        if (!rec.reason.empty()) {
 
-            os << "\n        reason: "
+            os << " | reason: "
                << rec.reason;
         }
 

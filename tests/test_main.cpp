@@ -1667,6 +1667,444 @@ static void testCancellation() {
 }
 
 // ============================================================
+// Q9: Department budgets
+// ============================================================
+
+static void testDepartments() {
+
+    Catalog c;
+
+    c.emplace<Book>(
+        "B1",
+        "Clean Code",
+        std::vector<std::string>{"Robert C. Martin"},
+        "ISBN1",
+        "Publisher",
+        2008,
+        Money::of(100)
+    );
+
+    c.emplace<Book>(
+        "B2",
+        "Design Patterns",
+        std::vector<std::string>{"Erich Gamma"},
+        "ISBN2",
+        "Publisher",
+        1994,
+        Money::of(200)
+    );
+
+    Budget defaultBudget(
+        Money::of(10000)
+    );
+
+    AcquisitionManager acq(
+        c,
+        defaultBudget
+    );
+
+    // --------------------------------------------------------
+    // Create two independent departments.
+    // --------------------------------------------------------
+
+    acq.addDepartment(
+        "Computer Science",
+        Money::of(1000)
+    );
+
+    acq.addDepartment(
+        "Physics",
+        Money::of(500)
+    );
+
+    CHECK(
+        acq.hasDepartment(
+            "Computer Science"
+        )
+    );
+
+    CHECK(
+        acq.hasDepartment(
+            "Physics"
+        )
+    );
+
+    CHECK(
+        !acq.hasDepartment(
+            "Mathematics"
+        )
+    );
+
+    CHECK_THROWS(
+        acq.addDepartment(
+            "Computer Science",
+            Money::of(500)
+        ),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        acq.addDepartment(
+            "",
+            Money::of(500)
+        ),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        acq.departmentBudget(
+            "Mathematics"
+        ),
+        std::invalid_argument
+    );
+
+    // --------------------------------------------------------
+    // Configure different quotas for each department.
+    // --------------------------------------------------------
+
+    acq.departmentBudget(
+        "Computer Science"
+    ).setQuota(
+        ResourceCategory::Book,
+        {
+            10,
+            Money::of(800),
+            2
+        }
+    );
+
+    acq.departmentBudget(
+        "Physics"
+    ).setQuota(
+        ResourceCategory::Book,
+        {
+            2,
+            Money::of(300),
+            1
+        }
+    );
+
+    // --------------------------------------------------------
+    // Computer Science purchases one B1.
+    // --------------------------------------------------------
+
+    std::string reason;
+
+    CHECK(
+        acq.canPurchase(
+            "Computer Science",
+            "B1",
+            1,
+            &reason
+        )
+    );
+
+    CHECK(
+        reason.empty()
+    );
+
+    const PurchaseRecord& csOrder =
+        acq.purchase(
+            "Computer Science",
+            "B1",
+            1
+        );
+
+    CHECK(
+        csOrder.approved
+    );
+
+    CHECK(
+        csOrder.department
+        == "Computer Science"
+    );
+
+    CHECK(
+        csOrder.resourceId
+        == "B1"
+    );
+
+    CHECK(
+        csOrder.quantity
+        == 1
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Computer Science"
+        ).spent()
+        == Money::of(100)
+    );
+
+    // --------------------------------------------------------
+    // Physics has not spent anything yet.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).spent()
+        == Money::of(0)
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).remaining()
+        == Money::of(500)
+    );
+
+    // --------------------------------------------------------
+    // Physics makes its own purchase.
+    // --------------------------------------------------------
+
+    const PurchaseRecord& physicsOrder =
+        acq.purchase(
+            "Physics",
+            "B1",
+            1
+        );
+
+    CHECK(
+        physicsOrder.approved
+    );
+
+    CHECK(
+        physicsOrder.department
+        == "Physics"
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).spent()
+        == Money::of(100)
+    );
+
+    // --------------------------------------------------------
+    // The two budgets remain independent.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.departmentBudget(
+            "Computer Science"
+        ).spent()
+        == Money::of(100)
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).spent()
+        == Money::of(100)
+    );
+
+    CHECK(
+        defaultBudget.spent()
+        == Money::of(0)
+    );
+
+    CHECK(
+        c.holdings("B1")
+        == 2
+    );
+
+    // --------------------------------------------------------
+    // Physics already has one Book unit.
+    // A second B1 is still allowed because the unit quota
+    // is 2.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.canPurchase(
+            "Physics",
+            "B1",
+            1,
+            &reason
+        )
+    );
+
+    // --------------------------------------------------------
+    // Two additional units would exceed Physics' unit quota.
+    // --------------------------------------------------------
+
+    CHECK(
+        !acq.canPurchase(
+            "Physics",
+            "B1",
+            2,
+            &reason
+        )
+    );
+
+    // --------------------------------------------------------
+    // Computer Science has a larger budget and quota.
+    // It can purchase two copies of B2.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.canPurchase(
+            "Computer Science",
+            "B2",
+            2,
+            &reason
+        )
+    );
+
+    const PurchaseRecord& csSecondOrder =
+        acq.purchase(
+            "Computer Science",
+            "B2",
+            2
+        );
+
+    CHECK(
+        csSecondOrder.approved
+    );
+
+    CHECK(
+        csSecondOrder.department
+        == "Computer Science"
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Computer Science"
+        ).spent()
+        == Money::of(500)
+    );
+
+    // --------------------------------------------------------
+    // Physics remains unaffected by the Computer Science
+    // purchase.
+    // --------------------------------------------------------
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).spent()
+        == Money::of(100)
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).remaining()
+        == Money::of(400)
+    );
+
+    // --------------------------------------------------------
+    // Batch processing respects the department in each
+    // PurchaseRequest.
+    // --------------------------------------------------------
+
+    const auto results =
+        acq.processBatch(
+            {
+                {"B1", 1, "Computer Science"},
+                {"B2", 1, "Physics"},
+                {"B1", 1, "Mathematics"}
+            }
+        );
+
+    CHECK(
+        results.size()
+        == 3
+    );
+
+    CHECK(
+        results[0].approved
+    );
+
+    CHECK(
+        results[0].department
+        == "Computer Science"
+    );
+
+    CHECK(
+        !results[1].approved
+    );
+
+    CHECK(
+        results[1].department
+        == "Physics"
+    );
+
+    CHECK(
+        results[1].reason.find("titles")
+        != std::string::npos
+    );
+
+    CHECK(
+        !results[2].approved
+    );
+
+    CHECK(
+        results[2].department
+        == "Mathematics"
+    );
+
+    CHECK(
+        results[2].reason.find("department")
+        != std::string::npos
+    );
+
+    // --------------------------------------------------------
+    // Cancellation refunds the budget of the department
+    // that originally paid for the order.
+    // --------------------------------------------------------
+
+    const PurchaseRecord& cancellable =
+        acq.purchase(
+            "Computer Science",
+            "B1",
+            1
+        );
+
+    CHECK(
+        cancellable.approved
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Computer Science"
+        ).spent()
+        == Money::of(700)
+    );
+
+    const int orderNo =
+        cancellable.orderNo;
+
+    const PurchaseRecord& cancellation =
+        acq.cancel(
+            orderNo
+        );
+
+    CHECK(
+        cancellation.cancelled
+    );
+
+    CHECK(
+        cancellation.department
+        == "Computer Science"
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Computer Science"
+        ).spent()
+        == Money::of(600)
+    );
+
+    CHECK(
+        acq.departmentBudget(
+            "Physics"
+        ).spent()
+        == Money::of(100)
+    );
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -1695,6 +2133,8 @@ int main() {
     testTaxes();
 
     testCancellation();
+
+    testDepartments();
 
     std::cout
         << "\n"

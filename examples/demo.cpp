@@ -2,6 +2,7 @@
 // and runs purchase requests through the acquisition manager.
 //
 // Q8 additionally demonstrates cancellation of an approved order.
+// Q9 additionally demonstrates department-specific budgets.
 
 #include <iostream>
 
@@ -274,6 +275,170 @@ int main() {
 
         std::cout << "Total spent after cancellation: "
                   << acq.totalSpent()
+                  << "\n";
+    }
+
+    // --------------------------------------------------
+    // Q9: Department Budgets
+    // --------------------------------------------------
+    //
+    // Each department has its own independent Budget.
+    //
+    // Here we create:
+    //
+    //   Computer Science:
+    //       Budget = 5000.00
+    //       Book quota = 10 units / 3000.00
+    //
+    //   Physics:
+    //       Budget = 3000.00
+    //       Book quota = 5 units / 1500.00
+    //
+    // Purchases made by one department do not consume
+    // the budget of another department.
+    // --------------------------------------------------
+
+    std::cout << "\n=== Q9 Department Budgets ===\n";
+
+    acq.addDepartment(
+        "Computer Science",
+        Money::of(5000)
+    );
+
+    acq.addDepartment(
+        "Physics",
+        Money::of(3000)
+    );
+
+    acq.departmentBudget("Computer Science").setQuota(
+        ResourceCategory::Book,
+        {10, Money::of(3000), 2}
+    );
+
+    acq.departmentBudget("Physics").setQuota(
+        ResourceCategory::Book,
+        {5, Money::of(1500), 1}
+    );
+
+    std::cout << "Computer Science budget: "
+              << acq.departmentBudget("Computer Science").total()
+              << "\n";
+
+    std::cout << "Physics budget: "
+              << acq.departmentBudget("Physics").total()
+              << "\n";
+
+    // Purchase B001 through Computer Science.
+    const PurchaseRecord& csOrder =
+        acq.purchase(
+            "Computer Science",
+            "B001",
+            2
+        );
+
+    std::cout << "\nComputer Science order #"
+              << csOrder.orderNo
+              << ": "
+              << (csOrder.approved ? "approved" : "rejected")
+              << "\n";
+
+    std::cout << "Computer Science spent: "
+              << acq.departmentBudget("Computer Science").spent()
+              << "\n";
+
+    std::cout << "Physics spent: "
+              << acq.departmentBudget("Physics").spent()
+              << "\n";
+
+    // Purchase B002 through Physics.
+    const PurchaseRecord& physicsOrder =
+        acq.purchase(
+            "Physics",
+            "B002",
+            1
+        );
+
+    std::cout << "\nPhysics order #"
+              << physicsOrder.orderNo
+              << ": "
+              << (physicsOrder.approved
+                      ? "approved"
+                      : "rejected")
+              << "\n";
+
+    std::cout << "Physics spent: "
+              << acq.departmentBudget("Physics").spent()
+              << "\n";
+
+    std::cout << "Computer Science spent: "
+              << acq.departmentBudget("Computer Science").spent()
+              << "\n";
+
+    // Q9: A department-specific batch.
+    std::cout << "\nDepartment batch:\n";
+
+    const auto departmentBatch =
+        acq.processBatch({
+            {"B001", 1, "Computer Science"},
+            {"E001", 2, "Computer Science"},
+            {"B001", 1, "Physics"}
+        });
+
+    for (const PurchaseRecord& order : departmentBatch) {
+        std::cout << "  Order #"
+                  << order.orderNo
+                  << " | Department: "
+                  << order.department
+                  << " | "
+                  << order.title
+                  << " | "
+                  << (order.approved
+                          ? "approved"
+                          : "rejected")
+                  << "\n";
+    }
+
+    std::cout << "\n=== Department Budgets After Purchases ===\n";
+
+    std::cout << "Computer Science spent: "
+              << acq.departmentBudget("Computer Science").spent()
+              << "\n";
+
+    std::cout << "Computer Science remaining: "
+              << acq.departmentBudget("Computer Science").remaining()
+              << "\n";
+
+    std::cout << "Physics spent: "
+              << acq.departmentBudget("Physics").spent()
+              << "\n";
+
+    std::cout << "Physics remaining: "
+              << acq.departmentBudget("Physics").remaining()
+              << "\n";
+
+    // Q9 + Q8:
+    // Cancel the Physics order and demonstrate that only
+    // the Physics department receives the refund.
+    std::cout << "\n=== Q9 Department Cancellation ===\n";
+
+    if (physicsOrder.approved) {
+        std::cout << "Physics spent before cancellation: "
+                  << acq.departmentBudget("Physics").spent()
+                  << "\n";
+
+        const PurchaseRecord& departmentCancellation =
+            acq.cancel(physicsOrder.orderNo);
+
+        std::cout << "Cancellation: "
+                  << departmentCancellation.reason
+                  << "\n";
+
+        std::cout << "Physics spent after cancellation: "
+                  << acq.departmentBudget("Physics").spent()
+                  << "\n";
+
+        std::cout << "Computer Science spent after Physics cancellation: "
+                  << acq.departmentBudget("Computer Science").spent()
                   << "\n";
     }
 
