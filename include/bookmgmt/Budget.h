@@ -1,4 +1,5 @@
 #pragma once
+
 // Budget: an overall spending limit plus optional per-category purchase quotas.
 //
 // A quota limits:
@@ -55,6 +56,20 @@ public:
     Money remaining() const {
         return total_ - spent_;
     }
+
+    // Q10:
+    // Create a fresh next-year budget by carrying forward
+    // a percentage of the currently unspent amount.
+    //
+    // The new budget:
+    //   - starts with zero spending,
+    //   - starts with zero category usage,
+    //   - starts with zero title usage,
+    //   - carries forward the configured quotas,
+    //   - receives percentage% of this year's unspent amount.
+    //
+    // percentage must be between 0 and 100 inclusive.
+    Budget rollover(double percentage) const;
 
     void setQuota(ResourceCategory c, Quota q);
     void removeQuota(ResourceCategory c);

@@ -28,6 +28,91 @@ Budget::Budget(Money total)
     }
 }
 
+// ------------------------------------------------------
+// Q10: Year-end rollover
+// ------------------------------------------------------
+//
+// Create a fresh Budget for the next year.
+//
+// Only a percentage of the CURRENTLY UNSPENT amount is
+// carried forward.
+//
+// The current year's:
+//   - spending,
+//   - category usage,
+//   - title usage
+//
+// are NOT copied.
+//
+// The configured category quotas ARE copied.
+//
+// Example:
+//
+//   Current budget = 10000
+//   Spent          = 6000
+//   Unspent        = 4000
+//   Rollover       = 50%
+//
+//   Next budget = 4000 * 50% = 2000
+// ------------------------------------------------------
+
+Budget Budget::rollover(double percentage) const {
+
+    if (percentage < 0.0 ||
+        percentage > 100.0) {
+
+        throw std::invalid_argument(
+            "rollover percentage must be between 0 and 100"
+        );
+    }
+
+    // Work with integer minor units so that the calculation
+    // does not convert the monetary amount through double.
+    //
+    // Example:
+    //
+    //   remaining = 400000 paise
+    //   percentage = 50
+    //
+    //   carry = 400000 * 50 / 100
+    //
+    // We use long double only for the percentage itself.
+    const long double percentageValue =
+        static_cast<long double>(percentage);
+
+    const long double carryMinorUnits =
+        static_cast<long double>(
+            remaining().minorUnits()
+        ) *
+        percentageValue /
+        100.0L;
+
+    // A monetary amount must contain a whole number of
+    // minor units. Round to the nearest minor unit.
+    const auto roundedCarry =
+        static_cast<std::int64_t>(
+            carryMinorUnits + 0.5L
+        );
+
+    Budget nextYear(
+        Money::fromMinor(roundedCarry)
+    );
+
+    // Quotas are configuration for the category.
+    // They apply to the next year's budget as well.
+    nextYear.quotas_ = quotas_;
+
+    // Do NOT copy:
+    //
+    //   spent_
+    //   usage_
+    //   titleUsage_
+    //
+    // These represent this year's consumption and the new
+    // year must start with fresh usage.
+    return nextYear;
+}
+
 void Budget::setQuota(
     ResourceCategory c,
     Quota q) {

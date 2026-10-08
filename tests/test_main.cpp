@@ -2105,6 +2105,253 @@ static void testDepartments() {
 }
 
 // ============================================================
+// Q10 - Year-end budget rollover
+// ============================================================
+
+static void testBudgetRollover() {
+
+    // --------------------------------------------------------
+    // Create this year's budget.
+    //
+    // Total budget = 1000
+    // Spent        = 400
+    // Unspent      = 600
+    // --------------------------------------------------------
+
+    Budget current(
+        Money::of(1000)
+    );
+
+    // Configure a quota for the current year.
+    current.setQuota(
+        ResourceCategory::Book,
+        {
+            10,
+            Money::of(500),
+            2
+        }
+    );
+
+    // Spend 400 from the budget.
+    current.commit(
+        ResourceCategory::Book,
+        2,
+        Money::of(400),
+        "Clean Code"
+    );
+
+    CHECK(
+        current.total() ==
+        Money::of(1000)
+    );
+
+    CHECK(
+        current.spent() ==
+        Money::of(400)
+    );
+
+    CHECK(
+        current.remaining() ==
+        Money::of(600)
+    );
+
+    // --------------------------------------------------------
+    // Q10: Carry forward 50% of the unspent amount.
+    //
+    // Unspent amount = 600
+    // Rollover      = 50%
+    //
+    // 600 * 50 / 100 = 300
+    //
+    // Therefore next year's budget = 300.
+    // --------------------------------------------------------
+
+    Budget next =
+        current.rollover(50.0);
+
+    CHECK(
+        next.total() ==
+        Money::of(300)
+    );
+
+    CHECK(
+        next.spent() ==
+        Money::of(0)
+    );
+
+    CHECK(
+        next.remaining() ==
+        Money::of(300)
+    );
+
+    // --------------------------------------------------------
+    // The quota configuration is carried forward.
+    // --------------------------------------------------------
+
+    const auto nextQuota =
+        next.quotaFor(
+            ResourceCategory::Book
+        );
+
+    CHECK(
+        nextQuota.has_value()
+    );
+
+    CHECK(
+        nextQuota->maxUnits == 10
+    );
+
+    CHECK(
+        nextQuota->maxSpend ==
+        Money::of(500)
+    );
+
+    CHECK(
+        nextQuota->maxTitles == 2
+    );
+
+    // --------------------------------------------------------
+    // Previous year's usage is NOT carried forward.
+    //
+    // The current year purchased:
+    //   2 units
+    //   ₹400
+    //   1 different title
+    //
+    // Next year must start with zero usage.
+    // --------------------------------------------------------
+
+    const Usage nextUsage =
+        next.usageFor(
+            ResourceCategory::Book
+        );
+
+    CHECK(
+        nextUsage.units == 0
+    );
+
+    CHECK(
+        nextUsage.spent ==
+        Money::of(0)
+    );
+
+    CHECK(
+        nextUsage.differentTitles == 0
+    );
+
+    // --------------------------------------------------------
+    // The original budget must remain unchanged.
+    // --------------------------------------------------------
+
+    CHECK(
+        current.total() ==
+        Money::of(1000)
+    );
+
+    CHECK(
+        current.spent() ==
+        Money::of(400)
+    );
+
+    CHECK(
+        current.remaining() ==
+        Money::of(600)
+    );
+
+    const Usage currentUsage =
+        current.usageFor(
+            ResourceCategory::Book
+        );
+
+    CHECK(
+        currentUsage.units == 2
+    );
+
+    CHECK(
+        currentUsage.spent ==
+        Money::of(400)
+    );
+
+    CHECK(
+        currentUsage.differentTitles == 1
+    );
+
+    // --------------------------------------------------------
+    // 0% rollover.
+    //
+    // No part of the unspent amount is carried forward.
+    // --------------------------------------------------------
+
+    Budget zeroCarry =
+        current.rollover(0.0);
+
+    CHECK(
+        zeroCarry.total() ==
+        Money::of(0)
+    );
+
+    CHECK(
+        zeroCarry.spent() ==
+        Money::of(0)
+    );
+
+    CHECK(
+        zeroCarry.remaining() ==
+        Money::of(0)
+    );
+
+    // Quota configuration is still copied even though
+    // the carried-forward budget is zero.
+    CHECK(
+        zeroCarry.quotaFor(
+            ResourceCategory::Book
+        ).has_value()
+    );
+
+    // --------------------------------------------------------
+    // 100% rollover.
+    //
+    // Entire unspent amount is carried forward.
+    //
+    // Unspent = 600
+    // 100% of 600 = 600
+    // --------------------------------------------------------
+
+    Budget fullCarry =
+        current.rollover(100.0);
+
+    CHECK(
+        fullCarry.total() ==
+        Money::of(600)
+    );
+
+    CHECK(
+        fullCarry.spent() ==
+        Money::of(0)
+    );
+
+    CHECK(
+        fullCarry.remaining() ==
+        Money::of(600)
+    );
+
+    // --------------------------------------------------------
+    // Invalid percentages must be rejected.
+    // --------------------------------------------------------
+
+    CHECK_THROWS(
+        current.rollover(-1.0),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        current.rollover(101.0),
+        std::invalid_argument
+    );
+}
+
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -2135,6 +2382,8 @@ int main() {
     testCancellation();
 
     testDepartments();
+
+    testBudgetRollover();
 
     std::cout
         << "\n"
