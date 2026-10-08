@@ -10,67 +10,121 @@
 
 namespace bookmgmt {
 
-AcquisitionManager::AcquisitionManager(Catalog& catalog, Budget& budget)
-    : catalog_(catalog), budget_(budget) {}
+AcquisitionManager::AcquisitionManager(
+    Catalog& catalog,
+    Budget& budget)
+    : catalog_(catalog),
+      budget_(budget) {
+}
 
-Money AcquisitionManager::quote(const std::string& id, int quantity) const {
+Money AcquisitionManager::quote(
+    const std::string& id,
+    int quantity) const {
+
     return catalog_.get(id).costFor(quantity);
 }
 
-void AcquisitionManager::setPrintTaxRate(double percent) {
+void AcquisitionManager::setPrintTaxRate(
+    double percent) {
+
     if (percent < 0.0) {
         throw std::invalid_argument(
-            "tax rate must not be negative");
+            "tax rate must not be negative"
+        );
     }
 
     printTaxRate_ = percent;
 }
 
-void AcquisitionManager::setElectronicTaxRate(double percent) {
+void AcquisitionManager::setElectronicTaxRate(
+    double percent) {
+
     if (percent < 0.0) {
         throw std::invalid_argument(
-            "tax rate must not be negative");
+            "tax rate must not be negative"
+        );
     }
 
     electronicTaxRate_ = percent;
 }
 
-Money AcquisitionManager::taxFor(const Resource& r,
-                                  Money preTaxCost) const {
-    const double rate = r.isDigital()
-                           ? electronicTaxRate_
-                           : printTaxRate_;
+Money AcquisitionManager::taxFor(
+    const Resource& r,
+    Money preTaxCost) const {
+
+    const double rate =
+        r.isDigital()
+            ? electronicTaxRate_
+            : printTaxRate_;
 
     const std::int64_t taxMinorUnits =
         static_cast<std::int64_t>(
-            preTaxCost.minorUnits() * rate / 100.0);
+            preTaxCost.minorUnits()
+            * rate
+            / 100.0
+        );
 
-    return Money::fromMinor(taxMinorUnits);
+    return Money::fromMinor(
+        taxMinorUnits
+    );
 }
 
-bool AcquisitionManager::canPurchase(const std::string& id,
-                                     int quantity,
-                                     std::string* reason) const {
+bool AcquisitionManager::canPurchase(
+    const std::string& id,
+    int quantity,
+    std::string* reason) const {
+
     std::string why;
 
     if (const Resource* r = catalog_.find(id)) {
-        if (quantity <= 0) {
-            why = "quantity must be positive";
-        } else {
-            const Money preTaxCost = r->costFor(quantity);
-            const Money tax = taxFor(*r, preTaxCost);
-            const Money postTaxCost = preTaxCost + tax;
 
-            // Q6: check the budget and quotas against
-            // the post-tax cost.
+        if (quantity <= 0) {
+
+            why = "quantity must be positive";
+
+        } else {
+
+            // ------------------------------------------
+            // Calculate pre-tax cost.
+            // ------------------------------------------
+
+            const Money preTaxCost =
+                r->costFor(quantity);
+
+            // ------------------------------------------
+            // Calculate tax.
+            // ------------------------------------------
+
+            const Money tax =
+                taxFor(*r, preTaxCost);
+
+            // ------------------------------------------
+            // Calculate final cost.
+            // ------------------------------------------
+
+            const Money postTaxCost =
+                preTaxCost + tax;
+
+            // ------------------------------------------
+            // Q6 + Q7:
+            //
+            // Budget checks:
+            //   - post-tax cost
+            //   - resource title
+            // ------------------------------------------
+
             why = budget_.check(
                 r->category(),
                 quantity,
-                postTaxCost
+                postTaxCost,
+                r->title()
             );
         }
+
     } else {
-        why = "resource not found: " + id;
+
+        why =
+            "resource not found: " + id;
     }
 
     if (reason) {
@@ -90,25 +144,30 @@ PurchaseRecord& AcquisitionManager::record(
     bool approved,
     std::string reason) {
 
-    history_.push_back(PurchaseRecord{
-        nextOrderNo_++,
-        id,
-        r ? r->title() : std::string("(unknown)"),
-        r ? r->category() : ResourceCategory::Book,
-        qty,
+    history_.push_back(
+        PurchaseRecord{
+            nextOrderNo_++,
+            id,
+            r
+                ? r->title()
+                : std::string("(unknown)"),
+            r
+                ? r->category()
+                : ResourceCategory::Book,
+            qty,
 
-        // Q6 tax breakdown.
-        preTaxCost,
-        tax,
-        postTaxCost,
+            preTaxCost,
+            tax,
+            postTaxCost,
 
-        // Keep the original `cost` field compatible with
-        // previous code. It represents the final amount charged.
-        postTaxCost,
+            // Backward compatibility:
+            // cost represents the final amount charged.
+            postTaxCost,
 
-        approved,
-        std::move(reason)
-    });
+            approved,
+            std::move(reason)
+        }
+    );
 
     return history_.back();
 }
@@ -117,30 +176,64 @@ const PurchaseRecord& AcquisitionManager::purchase(
     const std::string& id,
     int quantity) {
 
-    const Resource& r = catalog_.get(id);
+    // ----------------------------------------------
+    // Find the resource.
+    // ----------------------------------------------
 
-    // Step 1: calculate the original resource price.
-    const Money preTaxCost = r.costFor(quantity);
+    const Resource& r =
+        catalog_.get(id);
 
-    // Step 2: calculate tax.
-    const Money tax = taxFor(r, preTaxCost);
+    // ----------------------------------------------
+    // Calculate original price.
+    // ----------------------------------------------
 
-    // Step 3: calculate the final amount.
-    const Money postTaxCost = preTaxCost + tax;
+    const Money preTaxCost =
+        r.costFor(quantity);
 
-    // Step 4: Q6 requires quota and budget checks
-    // to use the post-tax cost.
+    // ----------------------------------------------
+    // Calculate tax.
+    // ----------------------------------------------
+
+    const Money tax =
+        taxFor(r, preTaxCost);
+
+    // ----------------------------------------------
+    // Calculate final amount.
+    // ----------------------------------------------
+
+    const Money postTaxCost =
+        preTaxCost + tax;
+
+    // ----------------------------------------------
+    // Q6 + Q7:
+    //
+    // Check the budget using:
+    //   - post-tax cost
+    //   - resource title
+    //
+    // If this fails, nothing below is changed.
+    // ----------------------------------------------
+
     budget_.commit(
         r.category(),
         quantity,
-        postTaxCost
+        postTaxCost,
+        r.title()
     );
 
-    // Step 5: update catalogue holdings only after
-    // the budget successfully accepts the purchase.
-    catalog_.addHoldings(id, quantity);
+    // ----------------------------------------------
+    // Update catalogue holdings.
+    // ----------------------------------------------
 
-    // Step 6: record the complete purchase information.
+    catalog_.addHoldings(
+        id,
+        quantity
+    );
+
+    // ----------------------------------------------
+    // Add purchase to history.
+    // ----------------------------------------------
+
     return record(
         &r,
         id,
@@ -153,45 +246,77 @@ const PurchaseRecord& AcquisitionManager::purchase(
     );
 }
 
-std::vector<PurchaseRecord> AcquisitionManager::processBatch(
+std::vector<PurchaseRecord>
+AcquisitionManager::processBatch(
     const std::vector<PurchaseRequest>& reqs) {
 
     std::vector<PurchaseRecord> results;
+
     results.reserve(reqs.size());
 
     for (const auto& req : reqs) {
-        const Resource* r = catalog_.find(req.resourceId);
+
+        const Resource* r =
+            catalog_.find(req.resourceId);
 
         Money preTaxCost;
         Money tax;
         Money postTaxCost;
+
         std::string why;
 
         if (!r) {
-            why = "resource not found: " + req.resourceId;
-        } else if (req.quantity <= 0) {
-            why = "quantity must be positive";
-        } else {
-            // Calculate the complete tax breakdown.
-            preTaxCost = r->costFor(req.quantity);
-            tax = taxFor(*r, preTaxCost);
-            postTaxCost = preTaxCost + tax;
 
-            // Q6: quota and budget checks use post-tax cost.
+            why =
+                "resource not found: "
+                + req.resourceId;
+
+        } else if (req.quantity <= 0) {
+
+            why =
+                "quantity must be positive";
+
+        } else {
+
+            // --------------------------------------
+            // Calculate tax breakdown.
+            // --------------------------------------
+
+            preTaxCost =
+                r->costFor(req.quantity);
+
+            tax =
+                taxFor(*r, preTaxCost);
+
+            postTaxCost =
+                preTaxCost + tax;
+
+            // --------------------------------------
+            // Q6 + Q7:
+            //
+            // Check using post-tax cost and title.
+            // --------------------------------------
+
             why = budget_.check(
                 r->category(),
                 req.quantity,
-                postTaxCost
+                postTaxCost,
+                r->title()
             );
         }
 
         if (why.empty()) {
-            // purchase() recalculates the same values and performs
-            // the actual budget/holdings update.
+
+            // purchase() performs the actual update.
             results.push_back(
-                purchase(req.resourceId, req.quantity)
+                purchase(
+                    req.resourceId,
+                    req.quantity
+                )
             );
+
         } else {
+
             // Rejected requests are still recorded.
             results.push_back(
                 record(
@@ -212,10 +337,13 @@ std::vector<PurchaseRecord> AcquisitionManager::processBatch(
 }
 
 Money AcquisitionManager::totalSpent() const {
+
     Money sum;
 
     for (const auto& rec : history_) {
+
         if (rec.approved) {
+
             // Actual spending includes tax.
             sum += rec.postTaxCost;
         }
@@ -224,17 +352,23 @@ Money AcquisitionManager::totalSpent() const {
     return sum;
 }
 
-void AcquisitionManager::printReport(std::ostream& os) const {
-    os << "Order history (" << history_.size()
+void AcquisitionManager::printReport(
+    std::ostream& os) const {
+
+    os << "Order history ("
+       << history_.size()
        << " orders)\n";
 
     for (const auto& rec : history_) {
+
         os << "  #"
            << std::setw(3)
            << std::left
            << rec.orderNo
            << " "
-           << (rec.approved ? "APPROVED" : "REJECTED")
+           << (rec.approved
+                   ? "APPROVED"
+                   : "REJECTED")
            << "  "
            << std::setw(6)
            << rec.resourceId
@@ -251,6 +385,7 @@ void AcquisitionManager::printReport(std::ostream& os) const {
            << rec.title;
 
         if (!rec.approved) {
+
             os << "\n        reason: "
                << rec.reason;
         }

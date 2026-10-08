@@ -1,8 +1,12 @@
 #pragma once
 // Budget: an overall spending limit plus optional per-category purchase quotas.
 //
-// A quota caps how many units (copies/seats) and how much money may be spent on
-// one category. Categories with no quota are limited only by the total budget.
+// A quota limits:
+//   1. the number of units,
+//   2. the amount of money spent,
+//   3. the number of different titles.
+//
+// A category without a quota is limited only by the overall budget.
 
 #include <iosfwd>
 #include <map>
@@ -15,50 +19,135 @@
 namespace bookmgmt {
 
 struct Quota {
-    int maxUnits;    // maximum copies/seats that may be bought
-    Money maxSpend;  // maximum money that may be spent
+    int maxUnits;
+    Money maxSpend;
+
+    // Q7:
+    // Maximum number of different titles allowed
+    // in this category.
+    //
+    // -1 means there is no limit.
+    int maxTitles = -1;
 };
 
 struct Usage {
     int units = 0;
     Money spent;
+
+    // Q7:
+    // Number of different titles currently purchased
+    // in this category.
+    int differentTitles = 0;
 };
 
 class Budget {
 public:
     explicit Budget(Money total);
 
-    Money total() const { return total_; }
-    Money spent() const { return spent_; }
-    Money remaining() const { return total_ - spent_; }
+    Money total() const {
+        return total_;
+    }
+
+    Money spent() const {
+        return spent_;
+    }
+
+    Money remaining() const {
+        return total_ - spent_;
+    }
 
     void setQuota(ResourceCategory c, Quota q);
     void removeQuota(ResourceCategory c);
+
     std::optional<Quota> quotaFor(ResourceCategory c) const;
+
     Usage usageFor(ResourceCategory c) const;
 
-    // Remaining allowance in a category; nullopt means "no quota set".
     std::optional<int> unitsRemaining(ResourceCategory c) const;
+
     std::optional<Money> spendRemaining(ResourceCategory c) const;
 
-    // Returns an empty string if the purchase fits, otherwise the reason it
-    // does not. Does not change state.
-    std::string check(ResourceCategory c, int units, Money cost) const;
+    // Original API.
+    //
+    // This version does not know the title, so it only checks
+    // units, spending and overall budget.
+    std::string check(
+        ResourceCategory c,
+        int units,
+        Money cost
+    ) const;
 
-    // Records a purchase. Throws QuotaExceededError / BudgetExceededError
-    // (and changes nothing) if it would not fit.
-    void commit(ResourceCategory c, int units, Money cost);
+    // Q7 version.
+    //
+    // The title is used to determine whether this purchase
+    // introduces a new title to the category.
+    std::string check(
+        ResourceCategory c,
+        int units,
+        Money cost,
+        const std::string& title
+    ) const;
+
+    // Original API.
+    void commit(
+        ResourceCategory c,
+        int units,
+        Money cost
+    );
+
+    // Q7 version.
+    //
+    // Records the title so that repeated purchases of the
+    // same title do not consume another title slot.
+    void commit(
+        ResourceCategory c,
+        int units,
+        Money cost,
+        const std::string& title
+    );
 
     void print(std::ostream& os) const;
 
 private:
-    enum class Failure { None, BadInput, Quota, Overall };
-    Failure evaluate(ResourceCategory c, int units, Money cost, std::string& why) const;
+    enum class Failure {
+        None,
+        BadInput,
+        Quota,
+        Overall
+    };
+
+    Failure evaluate(
+        ResourceCategory c,
+        int units,
+        Money cost,
+        const std::string& title,
+        std::string& why
+    ) const;
 
     Money total_;
     Money spent_;
+
     std::map<ResourceCategory, Quota> quotas_;
     std::map<ResourceCategory, Usage> usage_;
+
+    // Q7:
+    //
+    // For each category, store every title that has been
+    // purchased and the number of units purchased for it.
+    //
+    // Example:
+    //
+    // Book -> {
+    //     "Clean Code": 5,
+    //     "Design Patterns": 2
+    // }
+    //
+    // The size of the inner map is the number of
+    // different titles.
+    std::map<
+        ResourceCategory,
+        std::map<std::string, int>
+    > titleUsage_;
 };
 
 }  // namespace bookmgmt

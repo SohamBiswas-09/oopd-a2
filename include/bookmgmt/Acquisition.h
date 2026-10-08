@@ -33,19 +33,28 @@ struct PurchaseRecord {
     Money cost;
 
     bool approved;
-    std::string reason;  // why it was rejected; empty if approved
+    std::string reason;
 };
 
 class AcquisitionManager {
 public:
-    AcquisitionManager(Catalog& catalog, Budget& budget);
+    AcquisitionManager(
+        Catalog& catalog,
+        Budget& budget
+    );
 
-    // Price of a request before tax. Throws NotFoundError.
-    Money quote(const std::string& id, int quantity) const;
+    // Price of a request before tax.
+    // Throws NotFoundError.
+    Money quote(
+        const std::string& id,
+        int quantity
+    ) const;
 
     // Q6: configurable tax rates.
-    // Rates are percentages, so 5.0 means 5%.
+    // Rates are percentages.
+    // Example: 5.0 means 5%.
     void setPrintTaxRate(double percent);
+
     void setElectronicTaxRate(double percent);
 
     double printTaxRate() const {
@@ -56,52 +65,70 @@ public:
         return electronicTaxRate_;
     }
 
-    // True if the purchase would be approved; if not, `reason` explains why.
-    // Q6: budget/quota checks use the post-tax cost.
-    bool canPurchase(const std::string& id, int quantity,
-                     std::string* reason = nullptr) const;
+    // Checks whether a purchase would be approved.
+    //
+    // Q7: the resource title is passed to Budget so that
+    // the different-title quota can be checked.
+    bool canPurchase(
+        const std::string& id,
+        int quantity,
+        std::string* reason = nullptr
+    ) const;
 
-    // Buys immediately. Throws NotFoundError, QuotaExceededError,
-    // BudgetExceededError or std::invalid_argument. On success the budget
-    // and holdings are updated and the record is added to history.
-    const PurchaseRecord& purchase(const std::string& id, int quantity);
+    // Buys immediately.
+    //
+    // Throws:
+    //   NotFoundError
+    //   QuotaExceededError
+    //   BudgetExceededError
+    //   std::invalid_argument
+    const PurchaseRecord& purchase(
+        const std::string& id,
+        int quantity
+    );
 
-    // Processes requests in order; each is approved or rejected on its own
-    // (never throws for a rejected request). Every outcome is recorded.
-    // EXTENSION POINT: priority ordering, all-or-nothing batches, ...
+    // Processes requests in order.
+    // Each request is approved or rejected independently.
     std::vector<PurchaseRecord> processBatch(
-        const std::vector<PurchaseRequest>& reqs);
+        const std::vector<PurchaseRequest>& reqs
+    );
 
     const std::vector<PurchaseRecord>& history() const {
         return history_;
     }
 
-    // Q6: total amount actually spent, including tax.
     Money totalSpent() const;
 
     void printReport(std::ostream& os) const;
 
 private:
-    // Calculates tax for a resource using the configured rate.
-    Money taxFor(const Resource& r, Money preTaxCost) const;
+    // Calculates tax for a resource.
+    Money taxFor(
+        const Resource& r,
+        Money preTaxCost
+    ) const;
 
     // Creates a purchase-history record.
-    PurchaseRecord& record(const Resource* r,
-                           const std::string& id,
-                           int qty,
-                           Money preTaxCost,
-                           Money tax,
-                           Money postTaxCost,
-                           bool approved,
-                           std::string reason);
+    PurchaseRecord& record(
+        const Resource* r,
+        const std::string& id,
+        int qty,
+        Money preTaxCost,
+        Money tax,
+        Money postTaxCost,
+        bool approved,
+        std::string reason
+    );
 
     Catalog& catalog_;
     Budget& budget_;
 
     std::vector<PurchaseRecord> history_;
+
     int nextOrderNo_ = 1;
 
-    // Q6: configurable tax rates, expressed as percentages.
+    // Q6:
+    // Configurable tax rates, expressed as percentages.
     double printTaxRate_ = 0.0;
     double electronicTaxRate_ = 0.0;
 };
