@@ -56,6 +56,16 @@ Money Resource::costFor(int quantity) const {
     return unitPrice_ * quantity;
 }
 
+Money Resource::costForAtPrice(int quantity, Money vendorPrice) const {
+    requirePositive(quantity);
+
+    if (vendorPrice.isNegative()) {
+        throw std::invalid_argument("vendor price must not be negative");
+    }
+
+    return vendorPrice * quantity;
+}
+
 void Resource::print(std::ostream& os) const {
     os << categoryName(category()) << " " << id_ << "\n"
        << "  title: " << title_ << "\n"

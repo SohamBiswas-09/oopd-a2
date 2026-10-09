@@ -2653,6 +2653,155 @@ static void testBatchAllOrNothing() {
 }
 
 
+// Helper used by Q12 vendor tests.
+static Book& addBook(
+    Catalog& catalog,
+    const std::string& id,
+    const std::string& title,
+    Money price
+) {
+    return catalog.emplace<Book>(
+        id,
+        title,
+        std::vector<std::string>{"Author"},
+        "ISBN-" + id,
+        "Publisher",
+        2026,
+        price
+    );
+}
+
+// ============================================================
+// Q12 - Vendor selection and vendor-aware purchases
+// ============================================================
+
+static void testCheapestVendorAndPurchase() {
+    Catalog catalog;
+    addBook(catalog, "B1", "Algorithms", Money::of(100));
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(catalog, budget);
+
+    acq.addVendorOffer("B1", "Vendor A", Money::of(90));
+    acq.addVendorOffer("B1", "Vendor B", Money::of(75));
+    acq.addVendorOffer("B1", "Vendor C", Money::of(85));
+
+    const VendorOffer cheapest = acq.cheapestVendor("B1");
+
+    CHECK(cheapest.vendor == "Vendor B");
+    CHECK(cheapest.unitPrice == Money::of(75));
+    CHECK(acq.quote("B1", 2) == Money::of(150));
+
+    const PurchaseRecord& order = acq.purchase("B1", 2);
+
+    CHECK(order.approved);
+    CHECK(order.vendor == "Vendor B");
+    CHECK(order.quantity == 2);
+    CHECK(order.preTaxCost == Money::of(150));
+    CHECK(order.postTaxCost == Money::of(150));
+    CHECK(catalog.holdings("B1") == 2);
+    CHECK(budget.spent() == Money::of(150));
+}
+
+static void testVendorPriceUpdate() {
+    Catalog catalog;
+    addBook(catalog, "B1", "Algorithms", Money::of(100));
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(catalog, budget);
+
+    acq.addVendorOffer("B1", "Vendor A", Money::of(90));
+    acq.addVendorOffer("B1", "Vendor B", Money::of(80));
+
+    // Registering the same vendor again should update its offer.
+    acq.addVendorOffer("B1", "Vendor A", Money::of(70));
+
+    CHECK(acq.cheapestVendor("B1").vendor == "Vendor A");
+    CHECK(acq.quote("B1", 1) == Money::of(70));
+}
+
+static void testCataloguePriceFallback() {
+    Catalog catalog;
+    addBook(catalog, "B1", "Algorithms", Money::of(100));
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(catalog, budget);
+
+    CHECK(acq.quote("B1", 2) == Money::of(200));
+
+    const PurchaseRecord& order = acq.purchase("B1", 2);
+
+    CHECK(order.approved);
+    CHECK(order.vendor.empty());
+    CHECK(order.preTaxCost == Money::of(200));
+}
+
+static void testInvalidVendorOffers() {
+    Catalog catalog;
+    addBook(catalog, "B1", "Algorithms", Money::of(100));
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(catalog, budget);
+
+    CHECK_THROWS(
+        acq.addVendorOffer("UNKNOWN", "Vendor A", Money::of(50)),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        acq.addVendorOffer("B1", "", Money::of(50)),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        acq.addVendorOffer("B1", "Vendor A", Money::of(-1)),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        acq.cheapestVendor("B1"),
+        std::invalid_argument
+    );
+}
+
+static void testBatchUsesCheapestVendors() {
+    Catalog catalog;
+    addBook(catalog, "B1", "Algorithms", Money::of(100));
+    addBook(catalog, "B2", "Databases", Money::of(120));
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(catalog, budget);
+
+    acq.addVendorOffer("B1", "Vendor A", Money::of(90));
+    acq.addVendorOffer("B1", "Vendor B", Money::of(80));
+
+    acq.addVendorOffer("B2", "Vendor C", Money::of(110));
+    acq.addVendorOffer("B2", "Vendor D", Money::of(95));
+
+    const auto results = acq.processBatch({
+        {"B1", 2},
+        {"B2", 1}
+    });
+
+    CHECK(results.size() == 2);
+    CHECK(results[0].approved);
+    CHECK(results[1].approved);
+
+    CHECK(results[0].vendor == "Vendor B");
+    CHECK(results[0].preTaxCost == Money::of(160));
+
+    CHECK(results[1].vendor == "Vendor D");
+    CHECK(results[1].preTaxCost == Money::of(95));
+
+    CHECK(catalog.holdings("B1") == 2);
+    CHECK(catalog.holdings("B2") == 1);
+    CHECK(budget.spent() == Money::of(255));
+
+    CHECK(acq.history().size() == 2);
+    CHECK(acq.history()[0].vendor == "Vendor B");
+    CHECK(acq.history()[1].vendor == "Vendor D");
+}
+
 // ============================================================
 // Main
 // ============================================================
@@ -2688,6 +2837,12 @@ int main() {
     testBudgetRollover();
 
     testBatchAllOrNothing();
+
+    testCheapestVendorAndPurchase();
+    testVendorPriceUpdate();
+    testCataloguePriceFallback();
+    testInvalidVendorOffers();
+    testBatchUsesCheapestVendors();
 
     std::cout
         << "\n"

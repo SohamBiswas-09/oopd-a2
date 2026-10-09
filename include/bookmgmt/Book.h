@@ -28,6 +28,11 @@ public:
     // Hardcover books cost 20% more than their listed unit price.
     Money costFor(int copies) const override;
 
+    // Q12:
+    // Calculate the cost using a vendor-specific price while
+    // preserving the hardcover surcharge and bulk discount.
+    Money costForAtPrice(int copies, Money vendorPrice) const override;
+
 protected:
     void printDetails(std::ostream& os) const override;
 

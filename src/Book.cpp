@@ -64,6 +64,38 @@ Money Book::costFor(int copies) const {
     return total;
 }
 
+// Q12: Calculate the cost using a vendor-specific price.
+// The catalogue price remains unchanged.
+Money Book::costForAtPrice(int copies, Money vendorPrice) const {
+    requirePositive(copies);
+
+    if (vendorPrice.isNegative()) {
+        throw std::invalid_argument("vendor price must not be negative");
+    }
+
+    Money total;
+
+    if (binding_ == Binding::Paperback) {
+        total = vendorPrice * copies;
+    } else {
+        const std::int64_t listedPrice = vendorPrice.minorUnits();
+
+        const std::int64_t hardcoverPrice =
+            listedPrice + (listedPrice * 20) / 100;
+
+        total = Money::fromMinor(hardcoverPrice) * copies;
+    }
+
+    if (copies >= 10) {
+        const std::int64_t discountedMinorUnits =
+            (total.minorUnits() * 90) / 100;
+
+        return Money::fromMinor(discountedMinorUnits);
+    }
+
+    return total;
+}
+
 void Book::printDetails(std::ostream& os) const {
     os << "  authors: " << joinAuthors(authors_) << "\n"
        << "  isbn: " << isbn_ << "\n"

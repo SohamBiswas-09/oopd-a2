@@ -1,16 +1,11 @@
 #pragma once
 
-// AcquisitionManager: turns purchase requests into orders, enforcing the
-// Budget's quotas, updating Catalog holdings and keeping an order history.
+// AcquisitionManager: processes purchase requests, enforces budgets,
+// updates catalogue holdings and maintains order history.
 //
-// Q9:
-// Each department can have its own Budget object.
-// A purchase request can specify the department that pays for it.
-//
-// Q11:
-// processBatch() can optionally operate in all-or-nothing mode.
-// If allOrNothing is true, the complete batch is committed only when
-// every request can be approved.
+// Q9: Department-specific budgets.
+// Q11: Optional all-or-nothing batch processing.
+// Q12: Multiple vendors and cheapest-price selection.
 
 #include <iosfwd>
 #include <map>
@@ -24,11 +19,13 @@ namespace bookmgmt {
 
 struct PurchaseRequest {
     std::string resourceId;
-    int quantity;  // copies for print, seats for electronic
-
-    // Q9:
-    // Empty means use the original/default budget.
+    int quantity;
     std::string department;
+};
+
+struct VendorOffer {
+    std::string vendor;
+    Money unitPrice;
 };
 
 struct PurchaseRecord {
@@ -38,44 +35,27 @@ struct PurchaseRecord {
     ResourceCategory category;
     int quantity;
 
-    // Q6: complete tax breakdown.
     Money preTaxCost;
     Money tax;
     Money postTaxCost;
-
-    // Kept for backward compatibility with the original API.
-    // This is the final amount charged, i.e. the post-tax cost.
     Money cost;
 
     bool approved;
     std::string reason;
 
-    // Q8:
-    // True when this history entry represents a cancellation.
     bool cancelled = false;
-
-    // Q9:
-    // Department charged for this order.
-    // Empty means the original/default budget was used.
     std::string department;
+    std::string vendor;
 };
 
 class AcquisitionManager {
 public:
     AcquisitionManager(Catalog& catalog, Budget& budget);
 
-    Money quote(
-        const std::string& id,
-        int quantity
-    ) const;
+    Money quote(const std::string& id, int quantity) const;
 
-    void setPrintTaxRate(
-        double percent
-    );
-
-    void setElectronicTaxRate(
-        double percent
-    );
+    void setPrintTaxRate(double percent);
+    void setElectronicTaxRate(double percent);
 
     double printTaxRate() const {
         return printTaxRate_;
@@ -85,31 +65,28 @@ public:
         return electronicTaxRate_;
     }
 
-    // ========================================================
-    // Q9: Department budgets
-    // ========================================================
-
+    // Q9: Department budgets.
     void addDepartment(
         const std::string& department,
         Money budget
     );
 
-    Budget& departmentBudget(
-        const std::string& department
+    Budget& departmentBudget(const std::string& department);
+    const Budget& departmentBudget(const std::string& department) const;
+    bool hasDepartment(const std::string& department) const;
+
+    // Q12: Vendor offers.
+    void addVendorOffer(
+        const std::string& resourceId,
+        const std::string& vendor,
+        Money unitPrice
     );
 
-    const Budget& departmentBudget(
-        const std::string& department
+    VendorOffer cheapestVendor(
+        const std::string& resourceId
     ) const;
 
-    bool hasDepartment(
-        const std::string& department
-    ) const;
-
-    // ========================================================
-    // Purchase checking
-    // ========================================================
-
+    // Purchase checking.
     bool canPurchase(
         const std::string& id,
         int quantity,
@@ -123,10 +100,7 @@ public:
         std::string* reason = nullptr
     ) const;
 
-    // ========================================================
-    // Purchasing
-    // ========================================================
-
+    // Purchasing.
     const PurchaseRecord& purchase(
         const std::string& id,
         int quantity
@@ -138,26 +112,10 @@ public:
         int quantity
     );
 
-    // ========================================================
-    // Q8: Cancellation
-    // ========================================================
+    // Q8: Cancellation.
+    const PurchaseRecord& cancel(int orderNo);
 
-    const PurchaseRecord& cancel(
-        int orderNo
-    );
-
-    // ========================================================
-    // Q11: Batch processing
-    //
-    // allOrNothing = false:
-    //     Existing behavior. Each request is processed independently.
-    //
-    // allOrNothing = true:
-    //     The complete batch is committed only if every request
-    //     can be approved. If any request would fail, nothing
-    //     is purchased.
-    // ========================================================
-
+    // Q11: Batch processing.
     std::vector<PurchaseRecord> processBatch(
         const std::vector<PurchaseRequest>& reqs,
         bool allOrNothing = false
@@ -168,10 +126,7 @@ public:
     }
 
     Money totalSpent() const;
-
-    void printReport(
-        std::ostream& os
-    ) const;
+    void printReport(std::ostream& os) const;
 
 private:
     Money taxFor(
@@ -179,13 +134,17 @@ private:
         Money preTaxCost
     ) const;
 
-    Budget& budgetFor(
-        const std::string& department
-    );
-
-    const Budget& budgetFor(
-        const std::string& department
+    // Q12: Use the cheapest registered vendor's price.
+    // If no vendor offers exist, use the catalogue price.
+    Money costFor(
+        const Resource& resource,
+        const std::string& resourceId,
+        int quantity,
+        std::string* selectedVendor = nullptr
     ) const;
+
+    Budget& budgetFor(const std::string& department);
+    const Budget& budgetFor(const std::string& department) const;
 
     PurchaseRecord& record(
         const Resource* r,
@@ -197,24 +156,23 @@ private:
         bool approved,
         std::string reason,
         bool cancelled = false,
-        const std::string& department = {}
+        const std::string& department = {},
+        const std::string& vendor = {}
     );
 
     Catalog& catalog_;
-
-    // Original/default budget.
     Budget& budget_;
 
-    // Q9: budgets for named departments.
     std::map<std::string, Budget> departmentBudgets_;
+
+    // Q12: Resource ID -> registered vendor offers.
+    std::map<std::string, std::vector<VendorOffer>> vendorOffers_;
 
     std::vector<PurchaseRecord> history_;
 
     int nextOrderNo_ = 1;
-
     double printTaxRate_ = 0.0;
-
     double electronicTaxRate_ = 0.0;
 };
 
-}
+}  // namespace bookmgmt

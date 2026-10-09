@@ -25,8 +25,14 @@ public:
     ResourceCategory category() const override {
         return ResourceCategory::ElectronicResource;
     }
+
     bool isDigital() const override { return true; }
+
     Money costFor(int seats) const override;
+
+    // Q12: Calculate the cost using a vendor-specific price per seat.
+    // The platform fee and seat-pricing rules must remain unchanged.
+    Money costForAtPrice(int seats, Money vendorPrice) const override;
 
 protected:
     void printDetails(std::ostream& os) const override;

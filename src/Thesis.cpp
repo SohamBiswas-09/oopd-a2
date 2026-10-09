@@ -51,6 +51,28 @@ Money Thesis::costFor(int copies) const {
     return total;
 }
 
+// Q12: Calculate the cost using a vendor-specific price.
+// The catalogue price remains unchanged.
+Money Thesis::costForAtPrice(int copies, Money vendorPrice) const {
+    requirePositive(copies);
+
+    if (vendorPrice.isNegative()) {
+        throw std::invalid_argument(
+            "vendor price must not be negative");
+    }
+
+    Money total = vendorPrice * copies;
+
+    if (copies >= 10) {
+        const std::int64_t discountedMinorUnits =
+            (total.minorUnits() * 90) / 100;
+
+        return Money::fromMinor(discountedMinorUnits);
+    }
+
+    return total;
+}
+
 void Thesis::printDetails(std::ostream& os) const {
     os << "  university: " << university_ << "\n"
        << "  degree: " << degree_ << "\n"

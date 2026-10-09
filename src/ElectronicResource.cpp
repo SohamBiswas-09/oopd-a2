@@ -61,6 +61,33 @@ Money ElectronicResource::costFor(int seats) const {
     return total;
 }
 
+// Q12: Calculate the cost using a vendor-specific price per seat.
+// The catalogue price remains unchanged.
+Money ElectronicResource::costForAtPrice(
+    int seats, Money vendorPrice) const {
+    requirePositive(seats);
+
+    if (vendorPrice.isNegative()) {
+        throw std::invalid_argument(
+            "vendor price must not be negative");
+    }
+
+    const int fullPriceSeats = seats < 50 ? seats : 50;
+    const int discountedSeats = seats > 50 ? seats - 50 : 0;
+
+    Money total = platformFee_
+                + vendorPrice * fullPriceSeats;
+
+    if (discountedSeats > 0) {
+        const std::int64_t halfPrice =
+            vendorPrice.minorUnits() / 2;
+
+        total += Money::fromMinor(halfPrice) * discountedSeats;
+    }
+
+    return total;
+}
+
 void ElectronicResource::printDetails(std::ostream& os) const {
     os << "  access url: " << accessUrl_ << "\n"
        << "  license: " << licenseName(license_) << "\n"

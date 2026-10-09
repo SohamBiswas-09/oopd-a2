@@ -35,6 +35,10 @@ public:
 
     Money costFor(int copies) const override;
 
+    // Q12: Calculate the cost using a vendor-specific price
+    // while preserving the existing bulk discount.
+    Money costForAtPrice(int copies, Money vendorPrice) const override;
+
 protected:
     void printDetails(std::ostream& os) const override;
 

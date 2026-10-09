@@ -31,6 +31,8 @@ add_executable(demo examples/demo.cpp)
 target_link_libraries(demo PRIVATE bookmgmt)
 
 enable_testing()
+
+# Q1-Q12 test suite
 add_executable(bookmgmt_tests tests/test_main.cpp)
 target_link_libraries(bookmgmt_tests PRIVATE bookmgmt)
 add_test(NAME bookmgmt_tests COMMAND bookmgmt_tests)

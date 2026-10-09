@@ -53,6 +53,10 @@ public:
     // EXTENSION POINT: override for discounts, fees, tiered pricing, ...
     virtual Money costFor(int quantity) const;
 
+    // Q12: Calculate the cost using a vendor-specific unit price
+    // without changing the resource's catalogue price.
+    virtual Money costForAtPrice(int quantity, Money vendorPrice) const;
+
     // Writes a multi-line human-readable description.
     void print(std::ostream& os) const;
     // Single-line summary, e.g. "[Book] B001  Clean Code (2008)  @ 450.00".

@@ -36,6 +36,28 @@ Money Journal::costFor(int copies) const {
     return total;
 }
 
+// Q12: Calculate the cost using a vendor-specific price.
+// The catalogue price remains unchanged.
+Money Journal::costForAtPrice(int copies, Money vendorPrice) const {
+    requirePositive(copies);
+
+    if (vendorPrice.isNegative()) {
+        throw std::invalid_argument(
+            "vendor price must not be negative");
+    }
+
+    Money total = vendorPrice * copies * subscriptionYears_;
+
+    if (copies >= 10) {
+        const std::int64_t discountedMinorUnits =
+            (total.minorUnits() * 90) / 100;
+
+        return Money::fromMinor(discountedMinorUnits);
+    }
+
+    return total;
+}
+
 void Journal::printDetails(std::ostream& os) const {
     os << "  issn: " << issn_ << "\n"
        << "  issues per year: " << issuesPerYear_ << "\n"

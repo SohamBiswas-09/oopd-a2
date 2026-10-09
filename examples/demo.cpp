@@ -690,5 +690,61 @@ int main() {
         )
         << "\n";
 
+
+    // --------------------------------------------------------
+    // Q12: Multiple vendors and cheapest-vendor selection.
+    // --------------------------------------------------------
+    std::cout << "\n=== Q12 Vendor Selection ===\n";
+
+    Catalog q12Catalog;
+    q12Catalog.emplace<Book>(
+        "Q12-B1",
+        "Vendor Selection Example",
+        std::vector<std::string>{"Example Author"},
+        "ISBN-Q12-B1",
+        "Example Publisher",
+        2026,
+        Money::of(100)
+    );
+
+    Budget q12Budget(Money::of(1000));
+    AcquisitionManager q12Acq(q12Catalog, q12Budget);
+
+    q12Acq.addVendorOffer("Q12-B1", "Vendor A", Money::of(95));
+    q12Acq.addVendorOffer("Q12-B1", "Vendor B", Money::of(80));
+    q12Acq.addVendorOffer("Q12-B1", "Vendor C", Money::of(90));
+
+    const VendorOffer cheapest =
+        q12Acq.cheapestVendor("Q12-B1");
+
+    std::cout << "Catalogue unit price: "
+              << q12Catalog.get("Q12-B1").unitPrice()
+              << "\n";
+
+    std::cout << "Cheapest vendor: "
+              << cheapest.vendor
+              << " at "
+              << cheapest.unitPrice
+              << " per copy\n";
+
+    std::cout << "Quote for 2 copies: "
+              << q12Acq.quote("Q12-B1", 2)
+              << "\n";
+
+    const PurchaseRecord& vendorOrder =
+        q12Acq.purchase("Q12-B1", 2);
+
+    std::cout << "Order #"
+              << vendorOrder.orderNo
+              << " | Status: "
+              << (vendorOrder.approved ? "approved" : "rejected")
+              << " | Vendor: "
+              << (vendorOrder.vendor.empty()
+                      ? "none"
+                      : vendorOrder.vendor)
+              << " | Cost: "
+              << vendorOrder.postTaxCost
+              << "\n";
+
     return 0;
 }
