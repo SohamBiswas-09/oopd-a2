@@ -20,7 +20,7 @@ namespace bookmgmt {
 struct PurchaseRequest {
     std::string resourceId;
     int quantity;
-    std::string department;
+    std::string department{};
 };
 
 struct VendorOffer {
