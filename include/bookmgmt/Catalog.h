@@ -1,10 +1,12 @@
 #pragma once
+
 // Catalog: owns every Resource, keyed by its id, and tracks copies/seats held.
 
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bookmgmt/Resource.h"
@@ -26,31 +28,62 @@ public:
     }
 
     bool contains(const std::string& id) const;
-    Resource* find(const std::string& id);              // nullptr if absent
-    const Resource* find(const std::string& id) const;  // nullptr if absent
-    Resource& get(const std::string& id);               // throws NotFoundError
-    const Resource& get(const std::string& id) const;   // throws NotFoundError
-    void remove(const std::string& id);                 // throws NotFoundError
+    Resource* find(const std::string& id);
+    const Resource* find(const std::string& id) const;
 
-    std::size_t size() const { return items_.size(); }
-    bool empty() const { return items_.empty(); }
+    Resource& get(const std::string& id);
+    const Resource& get(const std::string& id) const;
+
+    void remove(const std::string& id);
+
+    std::size_t size() const {
+        return items_.size();
+    }
+
+    bool empty() const {
+        return items_.empty();
+    }
 
     // Holdings: number of copies (print) or seats (electronic) owned.
     int holdings(const std::string& id) const;
     void addHoldings(const std::string& id, int units);
 
-    // Queries. Results are in id order and point into the catalog.
+    // Existing catalogue queries.
     std::vector<const Resource*> all() const;
     std::vector<const Resource*> byCategory(ResourceCategory c) const;
-    std::vector<const Resource*> searchTitle(const std::string& text) const;  // case-insensitive
+    std::vector<const Resource*> searchTitle(
+        const std::string& text
+    ) const;
+
+    // Q13: search resources by author.
+    // Supports Book and EBook, with case-insensitive partial matching.
+    std::vector<const Resource*> searchAuthor(
+        const std::string& text
+    ) const;
+
+    // Q13: search ISBN for books/e-books and ISSN for journals.
+    // Matching is case-insensitive and allows partial identifiers.
+    std::vector<const Resource*> searchIsbnIssn(
+        const std::string& text
+    ) const;
+
+    // Q13: search an inclusive publication-year range.
+    // Throws std::invalid_argument if fromYear > toYear.
+    std::vector<const Resource*> searchYearRange(
+        int fromYear,
+        int toYear
+    ) const;
+
     std::vector<const Resource*> where(
-        const std::function<bool(const Resource&)>& pred) const;
+        const std::function<bool(const Resource&)>& pred
+    ) const;
 
 private:
     struct Entry {
         std::unique_ptr<Resource> resource;
         int holdings = 0;
     };
+
     std::map<std::string, Entry> items_;
 };
 

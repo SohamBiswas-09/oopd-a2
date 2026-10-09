@@ -2806,6 +2806,83 @@ static void testBatchUsesCheapestVendors() {
 // Main
 // ============================================================
 
+
+
+// ============================================================
+// Q13 - Search by author, ISBN/ISSN, and publication year
+// ============================================================
+
+static void testCatalogSearchesQ13() {
+    Catalog catalog;
+
+    catalog.emplace<Book>(
+        "B1", "Clean Code",
+        std::vector<std::string>{"Robert C. Martin", "Author Two"},
+        "978-0132350884", "Prentice Hall", 2008, Money::of(100)
+    );
+
+    catalog.emplace<Book>(
+        "B2", "Design Patterns",
+        std::vector<std::string>{"Erich Gamma", "Richard Helm"},
+        "978-0201633610", "Addison-Wesley", 1994, Money::of(120)
+    );
+
+    catalog.emplace<EBook>(
+        "E1", "Clean Architecture",
+        std::vector<std::string>{"Robert C. Martin"},
+        "978-0134494166", "Prentice Hall", 2017, Money::of(20),
+        "https://example.com/clean-architecture",
+        LicenseModel::Perpetual, Money::of(0), "PDF", false
+    );
+
+    catalog.emplace<Journal>(
+        "J1", "ACM Computing Surveys", "1234-5678", 12,
+        "ACM", 2022, Money::of(50)
+    );
+
+    // Search by author: case-insensitive partial matches.
+    auto authorResults = catalog.searchAuthor("robert c. martin");
+    CHECK(authorResults.size() == 2);
+
+    authorResults = catalog.searchAuthor("Erich");
+    CHECK(authorResults.size() == 1);
+    CHECK(authorResults[0]->id() == "B2");
+
+    CHECK(catalog.searchAuthor("No Such Author").empty());
+
+    // Search by ISBN/ISSN: books, e-books, and journals.
+    auto isbnResults = catalog.searchIsbnIssn("978-0132350884");
+    CHECK(isbnResults.size() == 1);
+    CHECK(isbnResults[0]->id() == "B1");
+
+    auto issnResults = catalog.searchIsbnIssn("1234-5678");
+    CHECK(issnResults.size() == 1);
+    CHECK(issnResults[0]->id() == "J1");
+
+    auto partialResults = catalog.searchIsbnIssn("978-013");
+    CHECK(partialResults.size() == 2);
+
+    CHECK(catalog.searchIsbnIssn("UNKNOWN-ID").empty());
+
+    // Publication-year range is inclusive at both endpoints.
+    auto yearResults = catalog.searchYearRange(2008, 2017);
+    CHECK(yearResults.size() == 2);
+
+    yearResults = catalog.searchYearRange(1994, 1994);
+    CHECK(yearResults.size() == 1);
+    CHECK(yearResults[0]->id() == "B2");
+
+    yearResults = catalog.searchYearRange(2023, 2025);
+    CHECK(yearResults.empty());
+
+    // An inverted range is invalid.
+    CHECK_THROWS(
+        catalog.searchYearRange(2020, 2000),
+        std::invalid_argument
+    );
+}
+
+
 int main() {
 
     testMoney();
@@ -2823,6 +2900,7 @@ int main() {
     testBulkDiscounts();
 
     testCatalog();
+    testCatalogSearchesQ13();
 
     testBudget();
 

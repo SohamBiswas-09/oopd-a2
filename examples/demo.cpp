@@ -746,5 +746,82 @@ int main() {
               << vendorOrder.postTaxCost
               << "\n";
 
+
+    // --------------------------------------------------------
+    // Q13: Search by author, ISBN/ISSN, and publication years.
+    // --------------------------------------------------------
+    std::cout << "\n=== Q13 Catalog Searches ===\n";
+
+    Catalog q13Catalog;
+
+    q13Catalog.emplace<Book>(
+        "Q13-B1",
+        "Clean Code",
+        std::vector<std::string>{"Robert C. Martin"},
+        "978-0132350884",
+        "Prentice Hall",
+        2008,
+        Money::of(100)
+    );
+
+    q13Catalog.emplace<Book>(
+        "Q13-B2",
+        "Design Patterns",
+        std::vector<std::string>{"Erich Gamma", "Richard Helm"},
+        "978-0201633610",
+        "Addison-Wesley",
+        1994,
+        Money::of(120)
+    );
+
+    q13Catalog.emplace<EBook>(
+        "Q13-E1",
+        "Clean Architecture",
+        std::vector<std::string>{"Robert C. Martin"},
+        "978-0134494166",
+        "Prentice Hall",
+        2017,
+        Money::of(20),
+        "https://example.com/clean-architecture",
+        LicenseModel::Perpetual,
+        Money::of(0),
+        "PDF",
+        false
+    );
+
+    q13Catalog.emplace<Journal>(
+        "Q13-J1",
+        "ACM Computing Surveys",
+        "1234-5678",
+        12,
+        "ACM",
+        2022,
+        Money::of(50)
+    );
+
+    std::cout << "\nSearch by author: Robert C. Martin\n";
+    for (const Resource* resource :
+         q13Catalog.searchAuthor("Robert C. Martin")) {
+        std::cout << "  " << resource->id()
+                  << " | " << resource->title()
+                  << " | " << resource->year() << "\n";
+    }
+
+    std::cout << "\nSearch by ISBN/ISSN: 1234-5678\n";
+    for (const Resource* resource :
+         q13Catalog.searchIsbnIssn("1234-5678")) {
+        std::cout << "  " << resource->id()
+                  << " | " << resource->title()
+                  << " | " << resource->year() << "\n";
+    }
+
+    std::cout << "\nSearch by publication year: 2008-2017\n";
+    for (const Resource* resource :
+         q13Catalog.searchYearRange(2008, 2017)) {
+        std::cout << "  " << resource->id()
+                  << " | " << resource->title()
+                  << " | " << resource->year() << "\n";
+    }
+
     return 0;
 }
