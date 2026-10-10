@@ -883,5 +883,49 @@ int main() {
     std::cout << "After P1 closes the session, seats available: "
               << lending.availableSeats("Q14-E1") << "\n";
 
+
+    // --------------------------------------------------------
+    // Q15: Currency-aware Money arithmetic and comparisons.
+    // --------------------------------------------------------
+    std::cout << "\n=== Q15 Currency Support ===\n";
+
+    const Money inr100 = Money::of(100, 0, "INR");
+    const Money inr50 = Money::of(50, 0, "INR");
+    const Money usd100 = Money::of(100, 0, "USD");
+    const Money usd25 = Money::of(25, 0, "USD");
+
+    std::cout << "INR 100 + INR 50 = "
+              << (inr100 + inr50) << " INR\n";
+
+    std::cout << "USD 100 - USD 25 = "
+              << (usd100 - usd25) << " USD\n";
+
+    std::cout << "INR currency code: " << inr100.currencyCode() << "\n";
+    std::cout << "USD currency code: " << usd100.currencyCode() << "\n";
+
+    try {
+        const Money mixed = inr100 + usd100;
+        std::cout << "Mixed-currency sum: " << mixed << "\n";
+    } catch (const std::invalid_argument& error) {
+        std::cout << "Mixed-currency addition rejected: "
+                  << error.what() << "\n";
+    }
+
+    try {
+        const Money mixed = inr100 - usd100;
+        std::cout << "Mixed-currency difference: " << mixed << "\n";
+    } catch (const std::invalid_argument& error) {
+        std::cout << "Mixed-currency subtraction rejected: "
+                  << error.what() << "\n";
+    }
+
+    try {
+        const bool less = inr100 < usd100;
+        std::cout << "Mixed-currency comparison: " << less << "\n";
+    } catch (const std::invalid_argument& error) {
+        std::cout << "Mixed-currency comparison rejected: "
+                  << error.what() << "\n";
+    }
+
     return 0;
 }

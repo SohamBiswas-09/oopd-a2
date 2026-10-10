@@ -2991,9 +2991,62 @@ static void testLendingQ14() {
     );
 }
 
+
+// ============================================================
+// Q15 - Money currency compatibility
+// ============================================================
+static void testMoneyCurrencyQ15() {
+    const Money inr100 = Money::of(100, 0, "INR");
+    const Money inr50 = Money::of(50, 0, "INR");
+    const Money usd100 = Money::of(100, 0, "USD");
+
+    // Currency codes are stored and preserved.
+    CHECK(inr100.currencyCode() == "INR");
+    CHECK(usd100.currencyCode() == "USD");
+    CHECK(Money::of(1).currencyCode() == "INR");
+    CHECK(Money::fromMinor(500, "USD").currencyCode() == "USD");
+
+    // Arithmetic using the same currency remains valid.
+    CHECK((inr100 + inr50).minorUnits() == 15000);
+    CHECK((inr100 - inr50).minorUnits() == 5000);
+    CHECK((inr100 * 2).currencyCode() == "INR");
+    CHECK((usd100 * 2).currencyCode() == "USD");
+
+    // In-place arithmetic must reject different currencies.
+    Money total = inr100;
+    CHECK_THROWS(total += usd100, std::invalid_argument);
+
+    total = inr100;
+    CHECK_THROWS(total -= usd100, std::invalid_argument);
+
+    // Binary arithmetic must reject different currencies.
+    CHECK_THROWS(inr100 + usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 - usd100, std::invalid_argument);
+
+    // All comparison operators must reject different currencies.
+    CHECK_THROWS(inr100 == usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 != usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 < usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 <= usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 > usd100, std::invalid_argument);
+    CHECK_THROWS(inr100 >= usd100, std::invalid_argument);
+
+    // An empty currency code is invalid.
+    CHECK_THROWS(
+        Money::of(1, 0, ""),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        Money::fromMinor(100, ""),
+        std::invalid_argument
+    );
+}
+
 int main() {
 
     testMoney();
+    testMoneyCurrencyQ15();
 
     testResourcesAndCost();
 
