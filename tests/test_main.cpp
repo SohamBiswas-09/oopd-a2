@@ -1,6 +1,7 @@
 // Minimal self-contained test runner.
 // Q1-Q8 tests for the BookManagement assignment.
 
+#include <cassert>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -15,30 +16,21 @@ using namespace bookmgmt;
 // Test framework
 // ============================================================
 
-static int g_failures = 0;
-static int g_checks = 0;
+// Q16: Use standard C++ assertions for test checks.
 
-#define CHECK(cond)                                                        \
-    do {                                                                   \
-        ++g_checks;                                                        \
-        if (!(cond)) {                                                     \
-            ++g_failures;                                                  \
-            std::cerr << __FILE__ << ":" << __LINE__                       \
-                      << ": CHECK failed: " #cond << "\n";                 \
-        }                                                                  \
-    } while (0)
+#define CHECK(condition) assert(condition)
 
-#define CHECK_THROWS(expr, ExType)                                         \
-    do {                                                                   \
-        bool thrown_ = false;                                              \
-        try {                                                              \
-            (void)(expr);                                                  \
-        } catch (const ExType&) {                                          \
-            thrown_ = true;                                                \
-        } catch (...) {                                                    \
-        }                                                                  \
-        CHECK(thrown_ && "expected " #ExType);                             \
-    } while (0)
+#define CHECK_THROWS(expression, ExceptionType)                 \
+    do {                                                        \
+        bool expectedExceptionThrown = false;                  \
+        try {                                                   \
+            (void)(expression);                                 \
+        } catch (const ExceptionType&) {                        \
+            expectedExceptionThrown = true;                    \
+        } catch (...) {                                         \
+        }                                                       \
+        assert(expectedExceptionThrown);                        \
+    } while (false)
 
 // ============================================================
 // Q1 - Money and basic resources
@@ -3084,22 +3076,6 @@ int main() {
     testInvalidVendorOffers();
     testBatchUsesCheapestVendors();
 
-    std::cout
-        << "\n"
-        << (g_checks - g_failures)
-        << "/"
-        << g_checks
-        << " checks passed\n";
-
-    if (g_failures == 0) {
-        std::cout
-            << "All tests passed.\n";
-        return 0;
-    }
-
-    std::cout
-        << g_failures
-        << " checks failed.\n";
-
-    return 1;
+    std::cout << "\nAll assertions passed.\n";
+    return 0;
 }
