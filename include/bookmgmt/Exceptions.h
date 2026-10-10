@@ -35,4 +35,22 @@ public:
     using LibraryError::LibraryError;
 };
 
+// Q14: Thrown when all print copies or electronic seats are in use.
+class LendingCapacityError : public LibraryError {
+public:
+    using LibraryError::LibraryError;
+};
+
+// Q14: Thrown when a patron attempts to return a copy they have not borrowed.
+class LoanNotFoundError : public LibraryError {
+public:
+    using LibraryError::LibraryError;
+};
+
+// Q14: Thrown when a patron attempts to close a session they have not opened.
+class SessionNotFoundError : public LibraryError {
+public:
+    using LibraryError::LibraryError;
+};
+
 }  // namespace bookmgmt

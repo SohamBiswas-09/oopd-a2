@@ -2883,6 +2883,114 @@ static void testCatalogSearchesQ13() {
 }
 
 
+
+// ============================================================
+// Q14 - Lending: print copies and electronic-resource sessions
+// ============================================================
+static void testLendingQ14() {
+    Catalog catalog;
+
+    catalog.emplace<Book>(
+        "L14-B1",
+        "Lending Test Book",
+        std::vector<std::string>{"Test Author"},
+        "ISBN-L14",
+        "Test Publisher",
+        2026,
+        Money::of(100)
+    );
+
+    catalog.addHoldings("L14-B1", 2);
+
+    catalog.emplace<EBook>(
+        "L14-E1",
+        "Lending Test EBook",
+        std::vector<std::string>{"Test Author"},
+        "ISBN-E14",
+        "Test Publisher",
+        2026,
+        Money::of(100),
+        "https://example.test/ebook"
+    );
+
+    catalog.addHoldings("L14-E1", 1);
+
+    LendingManager lending(catalog);
+
+    // Print-copy borrowing respects the number of copies held.
+    CHECK(lending.availableCopies("L14-B1") == 2);
+    lending.borrow("L14-B1", "P1");
+    CHECK(lending.activeLoans("L14-B1") == 1);
+    CHECK(lending.availableCopies("L14-B1") == 1);
+
+    lending.borrow("L14-B1", "P2");
+    CHECK(lending.activeLoans("L14-B1") == 2);
+    CHECK(lending.availableCopies("L14-B1") == 0);
+
+    CHECK_THROWS(
+        lending.borrow("L14-B1", "P3"),
+        LendingCapacityError
+    );
+
+    // Returning a copy restores availability.
+    lending.returnCopy("L14-B1", "P1");
+    CHECK(lending.activeLoans("L14-B1") == 1);
+    CHECK(lending.availableCopies("L14-B1") == 1);
+
+    CHECK_THROWS(
+        lending.returnCopy("L14-B1", "P1"),
+        LoanNotFoundError
+    );
+
+    lending.returnCopy("L14-B1", "P2");
+    CHECK(lending.activeLoans("L14-B1") == 0);
+    CHECK(lending.availableCopies("L14-B1") == 2);
+
+    // Electronic sessions respect the licensed-seat count.
+    CHECK(lending.availableSeats("L14-E1") == 1);
+    lending.openSession("L14-E1", "P1");
+    CHECK(lending.activeSessions("L14-E1") == 1);
+    CHECK(lending.availableSeats("L14-E1") == 0);
+
+    CHECK_THROWS(
+        lending.openSession("L14-E1", "P2"),
+        LendingCapacityError
+    );
+
+    // Closing a session releases its licensed seat.
+    lending.closeSession("L14-E1", "P1");
+    CHECK(lending.activeSessions("L14-E1") == 0);
+    CHECK(lending.availableSeats("L14-E1") == 1);
+
+    CHECK_THROWS(
+        lending.closeSession("L14-E1", "P1"),
+        SessionNotFoundError
+    );
+
+    // Reject operations on the wrong resource type.
+    CHECK_THROWS(
+        lending.openSession("L14-B1", "P1"),
+        std::invalid_argument
+    );
+
+    CHECK_THROWS(
+        lending.borrow("L14-E1", "P1"),
+        std::invalid_argument
+    );
+
+    // Reject an empty patron ID.
+    CHECK_THROWS(
+        lending.borrow("L14-B1", ""),
+        std::invalid_argument
+    );
+
+    // Unknown resource IDs are rejected.
+    CHECK_THROWS(
+        lending.borrow("UNKNOWN-L14", "P1"),
+        NotFoundError
+    );
+}
+
 int main() {
 
     testMoney();
@@ -2901,6 +3009,7 @@ int main() {
 
     testCatalog();
     testCatalogSearchesQ13();
+    testLendingQ14();
 
     testBudget();
 

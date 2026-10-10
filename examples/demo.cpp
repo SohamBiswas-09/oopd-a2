@@ -823,5 +823,65 @@ int main() {
                   << " | " << resource->year() << "\n";
     }
 
+
+    // --------------------------------------------------------
+    // Q14: Borrow/return print copies and manage digital sessions.
+    // --------------------------------------------------------
+    std::cout << "\n=== Q14 Lending ===\n";
+
+    Catalog q14Catalog;
+
+    q14Catalog.emplace<Book>(
+        "Q14-B1",
+        "Lending Test Book",
+        std::vector<std::string>{"Test Author"},
+        "ISBN-Q14",
+        "Test Publisher",
+        2026,
+        Money::of(100)
+    );
+    q14Catalog.addHoldings("Q14-B1", 2);
+
+    q14Catalog.emplace<EBook>(
+        "Q14-E1",
+        "Lending Test EBook",
+        std::vector<std::string>{"Test Author"},
+        "ISBN-E14",
+        "Test Publisher",
+        2026,
+        Money::of(20),
+        "https://example.com/ebook",
+        LicenseModel::Perpetual
+    );
+    q14Catalog.addHoldings("Q14-E1", 1);
+
+    LendingManager lending(q14Catalog);
+
+    std::cout << "Print copies available initially: "
+              << lending.availableCopies("Q14-B1") << "\n";
+
+    lending.borrow("Q14-B1", "P1");
+    std::cout << "After P1 borrows a copy, available: "
+              << lending.availableCopies("Q14-B1") << "\n";
+
+    lending.borrow("Q14-B1", "P2");
+    std::cout << "After P2 borrows a copy, available: "
+              << lending.availableCopies("Q14-B1") << "\n";
+
+    lending.returnCopy("Q14-B1", "P1");
+    std::cout << "After P1 returns a copy, available: "
+              << lending.availableCopies("Q14-B1") << "\n";
+
+    std::cout << "Electronic seats available initially: "
+              << lending.availableSeats("Q14-E1") << "\n";
+
+    lending.openSession("Q14-E1", "P1");
+    std::cout << "After P1 opens a session, seats available: "
+              << lending.availableSeats("Q14-E1") << "\n";
+
+    lending.closeSession("Q14-E1", "P1");
+    std::cout << "After P1 closes the session, seats available: "
+              << lending.availableSeats("Q14-E1") << "\n";
+
     return 0;
 }

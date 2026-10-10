@@ -16,6 +16,7 @@ add_library(bookmgmt
     src/Thesis.cpp
     src/Budget.cpp
     src/Catalog.cpp
+    src/LendingManager.cpp
     src/Acquisition.cpp
 )
 
