@@ -6,6 +6,8 @@
 
 namespace bookmgmt {
 
+// Q3: Thesis derives from Resource because it is a distinct catalogue item.
+// with its own university, degree, supervisor, and category metadata.
 class Thesis : public Resource {
 public:
     Thesis(std::string id,
